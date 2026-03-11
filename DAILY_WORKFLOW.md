@@ -1,67 +1,74 @@
-# Daily Workflow (VS Code + Git Bash)
+# Daily Workflow (LobosShop)
 
-Use this every time you continue coding.
+Use this checklist every time you work on the site.
 
-## 1) Start working locally
+## 1) Start locally
 
 Open VS Code in:
 
 `C:\Users\Hem\Desktop\App development\Lobos Shop`
 
-Open Git Bash in the same folder and run:
+In Git Bash (If other people have worked on it, this step will pull the updated files before you start working):
 
 ```bash
 cd "/c/Users/Hem/Desktop/App development/Lobos Shop"
-git pull origin main  (Skip this for now)
+git pull origin main
 ```
 
-Then edit code in VS Code.
+## 2) Commit and push
 
-## 2) Save and push your changes
 
-In top left of VS Code, go to Source Control and put the name of the changes and the commit.
+I do this step in VS Code (top left) "Source Control". Name the changes and then press commit.
 
-## 3) Deploy latest code to VPS
 
-SSH to VPS:
+
+## 3) Deploy to VPS
+
+SSH in:
 
 ```bash
 ssh root@161.97.68.242
 ```
 
-On VPS, run:
+Password: 5j56fKTJ5fBm9kbR2IuNY
+
+Deploy latest code:
 
 ```bash
 cd /var/www/LobosShop
 git pull origin main
 ```
 
-## 4) Restart app only if backend changed (Not needed now)
+After this step, you can refresh the website (F5) and you will see the updates.
 
-If you changed backend files (like `server/server.js`, routes, DB logic, `.env`), run:
+
+
+
+## 4) Restart backend only when needed 
+
+If backend changed (`server/server.js`, routes, DB, env):
 
 ```bash
-pm2 restart step-challenge
+pm2 restart lobos-shop
 ```
 
-If you changed only frontend files in `server/public/` (`index.html`, `style.css`, `script.js`), restart is usually not needed.
+If only frontend changed in `server/public/`, restart is usually not needed.
 
-## 5) Verify site (I can verify by going myself to the website instead)
-
-Run:
+## 5) Verify deployment
 
 ```bash
 curl https://lobos.se/api/health
+pm2 list
 ```
 
 Then open `https://lobos.se` in browser.
-If page looks old, do hard refresh: `Ctrl+F5`.
+If it looks old, hard refresh with `Ctrl+F5`.
 
 ## Quick Troubleshooting
 
-- VPS not showing latest changes:
+- Latest code missing on VPS:
   - `cd /var/www/LobosShop && git log -1 --oneline`
-  - Compare with GitHub latest commit.
-- App down:
+  - Compare with latest commit on GitHub.
+- App not running:
   - `pm2 list`
-  - `pm2 logs step-challenge --lines 50`
+  - `pm2 logs lobos-shop --lines 50`
