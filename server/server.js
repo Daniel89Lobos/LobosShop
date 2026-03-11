@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
@@ -7,6 +8,241 @@ require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PUBLIC_DIR = path.join(__dirname, "public");
+const FRONTEND_URL = (process.env.FRONTEND_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
+const SHOP_CURRENCY = "sek";
+const SHOP_COUNTRY = "SE";
+const SHIPPING_LABEL = "Sweden standard shipping";
+const STANDARD_SHIPPING_AMOUNT = 4900;
+const CART_METADATA_KEY = "cart_items";
+const SHIPPING_METADATA_KEY = "shipping_amount";
+const LOW_STOCK_THRESHOLD = 5;
+const DEFAULT_PAYMENT_METHOD_TYPES = ["card", "klarna", "swish"];
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require("stripe")(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const paymentMethodTypes = (process.env.STRIPE_PAYMENT_METHOD_TYPES || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+const enabledPaymentMethodTypes =
+  paymentMethodTypes.length > 0 ? paymentMethodTypes : DEFAULT_PAYMENT_METHOD_TYPES;
+
+// PostgreSQL connection
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT || 5432,
+});
+
+// Stripe webhook must receive the raw body before JSON parsing.
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+      return res.status(503).json({
+        error: "Stripe webhook is not configured",
+      });
+    }
+
+    const signature = req.headers["stripe-signature"];
+
+    if (!signature) {
+      return res.status(400).json({ error: "Missing Stripe signature" });
+    }
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET,
+      );
+    } catch (error) {
+      console.error("Stripe webhook signature verification failed:", error.message);
+      return res.status(400).json({ error: "Invalid webhook signature" });
+    }
+
+    if (event.type !== "checkout.session.completed") {
+      return res.json({ received: true });
+    }
+
+    const checkoutSession = event.data.object;
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const processedEvent = await client.query(
+        "SELECT stripe_event_id FROM stripe_events WHERE stripe_event_id = $1",
+        [event.id],
+      );
+
+      if (processedEvent.rows.length > 0) {
+        await client.query("COMMIT");
+        return res.json({ received: true, duplicate: true });
+      }
+
+      const existingOrder = await client.query(
+        "SELECT id FROM orders WHERE stripe_checkout_session_id = $1",
+        [checkoutSession.id],
+      );
+
+      if (existingOrder.rows.length > 0) {
+        await client.query(
+          "INSERT INTO stripe_events (stripe_event_id, event_type) VALUES ($1, $2)",
+          [event.id, event.type],
+        );
+        await client.query("COMMIT");
+        return res.json({ received: true, duplicate: true });
+      }
+
+      const rawCartItems = checkoutSession.metadata?.[CART_METADATA_KEY];
+      const cartItems = parseCartMetadata(rawCartItems);
+
+      if (cartItems.length === 0) {
+        throw new Error("Checkout session metadata is missing cart items");
+      }
+
+      const productIds = [...new Set(cartItems.map((item) => item.productId))];
+      const productsResult = await client.query(
+        "SELECT * FROM products WHERE id = ANY($1::int[]) FOR UPDATE",
+        [productIds],
+      );
+
+      const productMap = new Map(
+        productsResult.rows.map((product) => [Number(product.id), product]),
+      );
+
+      const orderItems = cartItems.map((item) => {
+        const product = productMap.get(item.productId);
+
+        if (!product) {
+          throw new Error(`Product ${item.productId} not found while finalizing order`);
+        }
+
+        return {
+          product,
+          quantity: item.quantity,
+          lineTotal: Number(product.unit_amount) * item.quantity,
+        };
+      });
+
+      const subtotalAmount = orderItems.reduce(
+        (sum, item) => sum + item.lineTotal,
+        0,
+      );
+      const shippingAmount = parseMinorAmount(
+        checkoutSession.metadata?.[SHIPPING_METADATA_KEY],
+      );
+      const taxAmount = Number(checkoutSession.total_details?.amount_tax || 0);
+      const totalAmount = Number(
+        checkoutSession.amount_total || subtotalAmount + shippingAmount + taxAmount,
+      );
+
+      const inventoryIssue = orderItems.some(
+        (item) => Number(item.product.stock_quantity) < item.quantity,
+      );
+
+      const shippingDetails = checkoutSession.shipping_details || {};
+      const customerDetails = checkoutSession.customer_details || {};
+      const shippingAddress = JSON.stringify({
+        name: shippingDetails.name || customerDetails.name || null,
+        phone: customerDetails.phone || null,
+        address: shippingDetails.address || customerDetails.address || null,
+      });
+
+      const orderResult = await client.query(
+        `INSERT INTO orders (
+          stripe_checkout_session_id,
+          stripe_payment_intent_id,
+          payment_status,
+          fulfillment_status,
+          customer_email,
+          customer_name,
+          phone,
+          shipping_address_json,
+          subtotal_amount,
+          shipping_amount,
+          tax_amount,
+          total_amount,
+          currency
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13
+        ) RETURNING id`,
+        [
+          checkoutSession.id,
+          checkoutSession.payment_intent || null,
+          checkoutSession.payment_status || "paid",
+          inventoryIssue ? "inventory_issue" : "paid",
+          customerDetails.email || checkoutSession.customer_email || null,
+          shippingDetails.name || customerDetails.name || null,
+          customerDetails.phone || null,
+          shippingAddress,
+          subtotalAmount,
+          shippingAmount,
+          taxAmount,
+          totalAmount,
+          SHOP_CURRENCY,
+        ],
+      );
+
+      for (const item of orderItems) {
+        await client.query(
+          `INSERT INTO order_items (
+            order_id,
+            product_id,
+            product_name,
+            unit_amount,
+            quantity,
+            line_total
+          ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            orderResult.rows[0].id,
+            item.product.id,
+            item.product.name,
+            item.product.unit_amount,
+            item.quantity,
+            item.lineTotal,
+          ],
+        );
+      }
+
+      if (!inventoryIssue) {
+        for (const item of orderItems) {
+          await client.query(
+            `UPDATE products
+             SET stock_quantity = stock_quantity - $1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2`,
+            [item.quantity, item.product.id],
+          );
+        }
+      }
+
+      await client.query(
+        "INSERT INTO stripe_events (stripe_event_id, event_type) VALUES ($1, $2)",
+        [event.id, event.type],
+      );
+
+      await client.query("COMMIT");
+      res.json({ received: true });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Stripe webhook handling failed:", error);
+      res.status(500).json({ error: "Could not finalize checkout session" });
+    } finally {
+      client.release();
+    }
+  },
+);
 
 // Middleware
 app.use(express.json());
@@ -18,15 +254,17 @@ app.use(
       "http://127.0.0.1:5500",
       "http://localhost:5500",
       "http://localhost:3000",
+      "https://lobos.se",
+      "https://www.lobos.se",
+      FRONTEND_URL,
       process.env.FRONTEND_URL,
-    ].filter(Boolean), // Remove any undefined values
+    ].filter(Boolean),
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-// Session configuration
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "your-secret-key-change-this",
@@ -34,19 +272,12 @@ app.use(
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000,
     },
   }),
 );
 
-// PostgreSQL connection
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT || 5432,
-});
+app.use(express.static(PUBLIC_DIR));
 
 // Test database connection
 pool.connect((err, client, release) => {
@@ -58,27 +289,377 @@ pool.connect((err, client, release) => {
   }
 });
 
-// Middleware to check if user is authenticated
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
   }
+
   next();
 };
 
+function parseMinorAmount(value) {
+  const parsed = Number.parseInt(String(value || "0"), 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatCurrency(amount, currency = SHOP_CURRENCY) {
+  try {
+    return new Intl.NumberFormat("sv-SE", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100);
+  } catch (error) {
+    return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+function getStockStatus(stockQuantity) {
+  if (stockQuantity <= 0) {
+    return "out_of_stock";
+  }
+
+  if (stockQuantity <= LOW_STOCK_THRESHOLD) {
+    return "low_stock";
+  }
+
+  return "in_stock";
+}
+
+function serializeProduct(product) {
+  return {
+    id: Number(product.id),
+    slug: product.slug,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    unitAmount: Number(product.unit_amount),
+    currency: product.currency,
+    price: formatCurrency(Number(product.unit_amount), product.currency),
+    stockQuantity: Number(product.stock_quantity),
+    stockStatus: getStockStatus(Number(product.stock_quantity)),
+    imagePath: product.image_path,
+    active: Boolean(product.active),
+    stripeTaxCode: product.stripe_tax_code,
+  };
+}
+
+function parseCartMetadata(rawValue) {
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => ({
+        productId: Number.parseInt(String(item.productId), 10),
+        quantity: Number.parseInt(String(item.quantity), 10),
+      }))
+      .filter(
+        (item) => Number.isInteger(item.productId) && item.productId > 0 && Number.isInteger(item.quantity) && item.quantity > 0,
+      );
+  } catch (error) {
+    return [];
+  }
+}
+
+function normalizeCartItems(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    const error = new Error("Your cart is empty");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const mergedItems = new Map();
+
+  for (const item of items) {
+    const productId = Number.parseInt(String(item.productId), 10);
+    const quantity = Number.parseInt(String(item.quantity), 10);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      const error = new Error("Cart contains an invalid product");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      const error = new Error("Cart contains an invalid quantity");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    mergedItems.set(productId, (mergedItems.get(productId) || 0) + quantity);
+  }
+
+  return [...mergedItems.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+}
+
+function buildLineItems(validatedItems, shippingAmount) {
+  const productLineItems = validatedItems.map(({ product, quantity }) => ({
+    quantity,
+    price_data: {
+      currency: product.currency,
+      product_data: {
+        name: product.name,
+        description: product.description,
+      },
+      unit_amount: Number(product.unit_amount),
+    },
+  }));
+
+  if (shippingAmount > 0) {
+    productLineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: SHOP_CURRENCY,
+        product_data: {
+          name: SHIPPING_LABEL,
+          description: "Flat shipping rate for Sweden orders",
+        },
+        unit_amount: shippingAmount,
+      },
+    });
+  }
+
+  return productLineItems;
+}
+
+async function loadProductsByIds(productIds, client = pool) {
+  return client.query(
+    "SELECT * FROM products WHERE id = ANY($1::int[]) AND active = true",
+    [productIds],
+  );
+}
+
+async function prepareCheckoutCart(items) {
+  const normalizedItems = normalizeCartItems(items);
+  const productIds = normalizedItems.map((item) => item.productId);
+  const productsResult = await loadProductsByIds(productIds);
+  const productMap = new Map(
+    productsResult.rows.map((product) => [Number(product.id), product]),
+  );
+
+  const validatedItems = normalizedItems.map((item) => {
+    const product = productMap.get(item.productId);
+
+    if (!product) {
+      const error = new Error("One or more products are no longer available");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (Number(product.stock_quantity) < item.quantity) {
+      const error = new Error(`${product.name} does not have enough stock`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    return {
+      product,
+      quantity: item.quantity,
+      lineTotal: Number(product.unit_amount) * item.quantity,
+    };
+  });
+
+  const subtotalAmount = validatedItems.reduce(
+    (sum, item) => sum + item.lineTotal,
+    0,
+  );
+  const shippingAmount = subtotalAmount > 0 ? STANDARD_SHIPPING_AMOUNT : 0;
+
+  return {
+    validatedItems,
+    subtotalAmount,
+    shippingAmount,
+    totalAmount: subtotalAmount + shippingAmount,
+  };
+}
+
+function handleShopError(error, res) {
+  if (error.code === "42P01") {
+    return res.status(503).json({
+      error: "Shop tables are missing. Run db/shop-schema.sql and db/shop-seed.sql first.",
+    });
+  }
+
+  if (error.statusCode) {
+    return res.status(error.statusCode).json({ error: error.message });
+  }
+
+  console.error("Shop API error:", error);
+  return res.status(500).json({ error: "Internal server error" });
+}
+
 // Routes
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "Server is running" });
 });
 
-// User Registration
+app.get("/api/products", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT *
+       FROM products
+       WHERE active = true
+       ORDER BY category ASC, name ASC`,
+    );
+
+    res.json({
+      products: result.rows.map(serializeProduct),
+      shipping: {
+        amount: STANDARD_SHIPPING_AMOUNT,
+        formattedAmount: formatCurrency(STANDARD_SHIPPING_AMOUNT),
+        country: SHOP_COUNTRY,
+        label: SHIPPING_LABEL,
+      },
+    });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.get("/api/products/:slug", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM products WHERE slug = $1 AND active = true LIMIT 1",
+      [req.params.slug],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    res.json({ product: serializeProduct(result.rows[0]) });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.post("/api/checkout/session", async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({
+      error: "Stripe is not configured yet. Add STRIPE_SECRET_KEY before checkout.",
+    });
+  }
+
+  try {
+    const { validatedItems, shippingAmount } = await prepareCheckoutCart(req.body.items);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      locale: "sv",
+      customer_creation: "always",
+      billing_address_collection: "auto",
+      shipping_address_collection: {
+        allowed_countries: [SHOP_COUNTRY],
+      },
+      phone_number_collection: {
+        enabled: true,
+      },
+      payment_method_types: enabledPaymentMethodTypes,
+      line_items: buildLineItems(validatedItems, shippingAmount),
+      success_url: `${FRONTEND_URL}/checkout-success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL}/checkout-cancel.html`,
+      metadata: {
+        [CART_METADATA_KEY]: JSON.stringify(
+          validatedItems.map((item) => ({
+            productId: Number(item.product.id),
+            quantity: item.quantity,
+          })),
+        ),
+        [SHIPPING_METADATA_KEY]: String(shippingAmount),
+      },
+    });
+
+    res.json({
+      sessionId: session.id,
+      url: session.url,
+    });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.get("/api/orders/checkout-session/:sessionId", async (req, res) => {
+  try {
+    const orderResult = await pool.query(
+      `SELECT *
+       FROM orders
+       WHERE stripe_checkout_session_id = $1
+       LIMIT 1`,
+      [req.params.sessionId],
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderResult.rows[0];
+    const itemsResult = await pool.query(
+      `SELECT product_name, unit_amount, quantity, line_total
+       FROM order_items
+       WHERE order_id = $1
+       ORDER BY id ASC`,
+      [order.id],
+    );
+
+    res.json({
+      order: {
+        id: order.id,
+        checkoutSessionId: order.stripe_checkout_session_id,
+        paymentStatus: order.payment_status,
+        fulfillmentStatus: order.fulfillment_status,
+        customerEmail: order.customer_email,
+        customerName: order.customer_name,
+        phone: order.phone,
+        shippingAddress: order.shipping_address_json,
+        subtotalAmount: Number(order.subtotal_amount),
+        shippingAmount: Number(order.shipping_amount),
+        taxAmount: Number(order.tax_amount),
+        totalAmount: Number(order.total_amount),
+        currency: order.currency,
+        createdAt: order.created_at,
+        items: itemsResult.rows.map((item) => ({
+          productName: item.product_name,
+          unitAmount: Number(item.unit_amount),
+          quantity: Number(item.quantity),
+          lineTotal: Number(item.line_total),
+        })),
+      },
+    });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.get("/api/orders", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, customer_email, payment_status, fulfillment_status, total_amount, created_at
+       FROM orders
+       ORDER BY created_at DESC
+       LIMIT 50`,
+    );
+
+    res.json({ orders: result.rows });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
 app.post("/api/register", async (req, res) => {
   try {
     const { username, password, group } = req.body;
 
-    // Validation
     if (!username || !password || !group) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -95,7 +676,6 @@ app.post("/api/register", async (req, res) => {
         .json({ error: "Password must be at least 6 characters" });
     }
 
-    // Check if username already exists
     const existingUser = await pool.query(
       "SELECT id FROM users WHERE username = $1",
       [username.trim()],
@@ -105,11 +685,7 @@ app.post("/api/register", async (req, res) => {
       return res.status(400).json({ error: "Username already exists" });
     }
 
-    // Hash password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create user
+    const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
       "INSERT INTO users (username, password, group_name) VALUES ($1, $2, $3) RETURNING id, username, group_name",
       [username.trim(), hashedPassword, group.trim().toUpperCase()],
@@ -125,7 +701,6 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// User Login
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -136,7 +711,6 @@ app.post("/api/login", async (req, res) => {
         .json({ error: "Username and password are required" });
     }
 
-    // Find user
     const result = await pool.query(
       "SELECT id, username, password, group_name FROM users WHERE username = $1",
       [username.trim()],
@@ -147,14 +721,12 @@ app.post("/api/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-
-    // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
+
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    // Set session
     req.session.userId = user.id;
     req.session.username = user.username;
 
@@ -172,17 +744,16 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// User Logout
 app.post("/api/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ error: "Could not log out" });
     }
+
     res.json({ message: "Logout successful" });
   });
 });
 
-// Get current user profile
 app.get("/api/user/profile", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -201,7 +772,6 @@ app.get("/api/user/profile", requireAuth, async (req, res) => {
   }
 });
 
-// Change password
 app.put("/api/user/password", requireAuth, async (req, res) => {
   try {
     const { newPassword } = req.body;
@@ -226,7 +796,6 @@ app.put("/api/user/password", requireAuth, async (req, res) => {
   }
 });
 
-// Change group
 app.put("/api/user/group", requireAuth, async (req, res) => {
   try {
     const { newGroup } = req.body;
@@ -247,7 +816,6 @@ app.put("/api/user/group", requireAuth, async (req, res) => {
   }
 });
 
-// Add/Update steps for a specific date
 app.post("/api/steps", requireAuth, async (req, res) => {
   try {
     const { date, steps } = req.body;
@@ -255,18 +823,16 @@ app.post("/api/steps", requireAuth, async (req, res) => {
     if (!date || steps === undefined || steps < 0) {
       return res
         .status(400)
-        .json({ error: "Valid date and steps (≥0) are required" });
+        .json({ error: "Valid date and steps (>=0) are required" });
     }
 
-    // Use UPSERT (INSERT ... ON CONFLICT)
     const result = await pool.query(
-      `
-            INSERT INTO step_logs (user_id, log_date, steps) 
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id, log_date) 
-            DO UPDATE SET steps = $3, updated_at = CURRENT_TIMESTAMP
-            RETURNING *`,
-      [req.session.userId, date, parseInt(steps)],
+      `INSERT INTO step_logs (user_id, log_date, steps)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, log_date)
+       DO UPDATE SET steps = $3, updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [req.session.userId, date, Number.parseInt(steps, 10)],
     );
 
     res.json({
@@ -279,7 +845,6 @@ app.post("/api/steps", requireAuth, async (req, res) => {
   }
 });
 
-// Get user's step log
 app.get("/api/steps", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -287,8 +852,8 @@ app.get("/api/steps", requireAuth, async (req, res) => {
       [req.session.userId],
     );
 
-    // Convert to object format like the frontend expects
     const stepLog = {};
+
     result.rows.forEach((row) => {
       stepLog[row.log_date.toISOString().split("T")[0]] = row.steps;
     });
@@ -300,19 +865,18 @@ app.get("/api/steps", requireAuth, async (req, res) => {
   }
 });
 
-// Get individual leaderboard
 app.get("/api/leaderboard/individual", async (req, res) => {
   try {
     const result = await pool.query(`
-            SELECT 
-                u.username,
-                u.group_name,
-                COALESCE(SUM(sl.steps), 0) as total_steps
-            FROM users u
-            LEFT JOIN step_logs sl ON u.id = sl.user_id
-            GROUP BY u.id, u.username, u.group_name
-            ORDER BY total_steps DESC
-        `);
+      SELECT
+        u.username,
+        u.group_name,
+        COALESCE(SUM(sl.steps), 0) AS total_steps
+      FROM users u
+      LEFT JOIN step_logs sl ON u.id = sl.user_id
+      GROUP BY u.id, u.username, u.group_name
+      ORDER BY total_steps DESC
+    `);
 
     res.json({ leaderboard: result.rows });
   } catch (error) {
@@ -321,19 +885,18 @@ app.get("/api/leaderboard/individual", async (req, res) => {
   }
 });
 
-// Get group leaderboard
 app.get("/api/leaderboard/group", async (req, res) => {
   try {
     const result = await pool.query(`
-            SELECT 
-                u.group_name,
-                SUM(COALESCE(sl.steps, 0)) as total_steps,
-                COUNT(DISTINCT u.id) as member_count
-            FROM users u
-            LEFT JOIN step_logs sl ON u.id = sl.user_id
-            GROUP BY u.group_name
-            ORDER BY total_steps DESC
-        `);
+      SELECT
+        u.group_name,
+        SUM(COALESCE(sl.steps, 0)) AS total_steps,
+        COUNT(DISTINCT u.id) AS member_count
+      FROM users u
+      LEFT JOIN step_logs sl ON u.id = sl.user_id
+      GROUP BY u.group_name
+      ORDER BY total_steps DESC
+    `);
 
     res.json({ leaderboard: result.rows });
   } catch (error) {
@@ -342,7 +905,6 @@ app.get("/api/leaderboard/group", async (req, res) => {
   }
 });
 
-// Clear individual leaderboard (reset all users' steps to 0)
 app.delete("/api/leaderboard/individual", requireAuth, async (req, res) => {
   try {
     await pool.query("DELETE FROM step_logs");
@@ -353,7 +915,6 @@ app.delete("/api/leaderboard/individual", requireAuth, async (req, res) => {
   }
 });
 
-// Clear group leaderboard (same as individual since groups are derived from users)
 app.delete("/api/leaderboard/group", requireAuth, async (req, res) => {
   try {
     await pool.query("DELETE FROM step_logs");
@@ -364,31 +925,28 @@ app.delete("/api/leaderboard/group", requireAuth, async (req, res) => {
   }
 });
 
-// Check authentication status
 app.get("/api/auth/check", (req, res) => {
   if (req.session.userId) {
-    res.json({
+    return res.json({
       authenticated: true,
       username: req.session.username,
     });
-  } else {
-    res.json({ authenticated: false });
   }
+
+  return res.json({ authenticated: false });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: "Something went wrong!" });
 });
 
-// 404 handler
 app.use("*", (req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Storefront: ${FRONTEND_URL}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
