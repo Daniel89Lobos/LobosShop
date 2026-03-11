@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-label="Dummy cover image for The Lantern Trail Club">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fde7cd"/>
+      <stop offset="100%" stop-color="#f7c98f"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" fill="url(#bg)"/>
+  <circle cx="655" cy="122" r="56" fill="#ffefba"/>
+  <rect x="84" y="112" width="360" height="286" rx="16" fill="#ffffff" opacity="0.82"/>
+  <text x="112" y="188" font-size="42" fill="#253642" font-family="Arial, sans-serif" font-weight="700">The Lantern</text>
+  <text x="112" y="236" font-size="42" fill="#253642" font-family="Arial, sans-serif" font-weight="700">Trail Club</text>
+  <text x="112" y="294" font-size="24" fill="#4f6574" font-family="Arial, sans-serif">Dummy cover image</text>
+  <text x="112" y="334" font-size="24" fill="#4f6574" font-family="Arial, sans-serif">Ages 9-12</text>
+</svg>
