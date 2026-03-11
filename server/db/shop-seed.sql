@@ -1,0 +1,71 @@
+INSERT INTO products (
+  slug,
+  name,
+  description,
+  category,
+  unit_amount,
+  currency,
+  stock_quantity,
+  image_path,
+  active,
+  stripe_tax_code
+) VALUES
+  (
+    'the-lantern-trail-club',
+    'The Lantern Trail Club',
+    'Adventure mystery chapter book for readers aged 9-12.',
+    'books',
+    16000,
+    'sek',
+    24,
+    'assets/images/book-lantern.svg',
+    true,
+    NULL
+  ),
+  (
+    'mapmakers-of-moon-bay',
+    'Mapmakers of Moon Bay',
+    'Middle-grade story focused on teamwork, creativity, and discovery.',
+    'books',
+    18000,
+    'sek',
+    18,
+    'assets/images/book-mapmakers.svg',
+    true,
+    NULL
+  ),
+  (
+    'adult-creative-reset-calendar',
+    'Adult Creative Reset Calendar',
+    'Daily prompts for adults building calm, consistent hobby habits.',
+    'calendars',
+    20000,
+    'sek',
+    16,
+    'assets/images/calendar-adult.svg',
+    true,
+    NULL
+  ),
+  (
+    'family-hobby-year-planner',
+    'Family Hobby Year Planner',
+    'Monthly family activities with low-prep ideas and memory prompts.',
+    'calendars',
+    22000,
+    'sek',
+    14,
+    'assets/images/calendar-family.svg',
+    true,
+    NULL
+  )
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  category = EXCLUDED.category,
+  unit_amount = EXCLUDED.unit_amount,
+  currency = EXCLUDED.currency,
+  stock_quantity = EXCLUDED.stock_quantity,
+  image_path = EXCLUDED.image_path,
+  active = EXCLUDED.active,
+  stripe_tax_code = EXCLUDED.stripe_tax_code,
+  updated_at = CURRENT_TIMESTAMP;

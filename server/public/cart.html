@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cart | Lobos Shop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html">Lobos Shop</a>
+      <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
+      <nav id="siteNav" class="site-nav">
+        <a href="index.html">Home</a>
+        <a href="shop.html">Shop</a>
+        <a href="about.html">About</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+        <a class="active cart-link" href="cart.html">Cart <span class="cart-count" data-cart-count hidden>0</span></a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="content-panel">
+        <h1>Your cart</h1>
+        <p>Review quantities, confirm stock, and continue to Stripe Checkout for shipping and payment.</p>
+      </section>
+
+      <p id="cartNotice" class="page-status" hidden></p>
+
+      <section class="cart-layout">
+        <section class="cart-list">
+          <div id="cartItems" class="cart-items"></div>
+        </section>
+
+        <aside class="cart-summary">
+          <h2>Order summary</h2>
+          <div class="summary-row">
+            <span>Subtotal</span>
+            <strong id="subtotalValue">0 kr</strong>
+          </div>
+          <div class="summary-row">
+            <span>Shipping</span>
+            <strong id="shippingValue">Calculated at checkout</strong>
+          </div>
+          <div class="summary-row total">
+            <span>Estimated total</span>
+            <strong id="totalValue">0 kr</strong>
+          </div>
+          <p class="muted">Shipping is collected for Sweden only during this first launch phase.</p>
+          <button id="checkoutButton" class="btn" type="button">Continue to Stripe Checkout</button>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Lobos Shop</p>
+    </footer>
+    <script src="script.js"></script>
+    <script src="cart.js"></script>
+  </body>
+</html>

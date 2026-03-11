@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>About | Lobos Shop</title>
+    <title>Order Confirmed | Lobos Shop</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +19,7 @@
       <nav id="siteNav" class="site-nav">
         <a href="index.html">Home</a>
         <a href="shop.html">Shop</a>
-        <a class="active" href="about.html">About</a>
+        <a href="about.html">About</a>
         <a href="faq.html">FAQ</a>
         <a href="contact.html">Contact</a>
         <a href="cart.html" class="cart-link">Cart <span class="cart-count" data-cart-count hidden>0</span></a>
@@ -28,20 +28,20 @@
 
     <main>
       <section class="content-panel">
-        <h1>Our Story</h1>
-        <p>
-          Lobos Shop started with one idea: creativity should feel
-          doable, not overwhelming. We design products that fit real life.
-        </p>
+        <h1>Thanks for your order</h1>
+        <p>Stripe has finished the payment flow. We are now loading the final order details from the backend.</p>
       </section>
 
-      <section class="content-panel">
-        <h2>What we create</h2>
-        <ul>
-          <li>Children's books for ages 9-12 with strong character journeys.</li>
-          <li>Hobby calendars for adults and families with clear monthly structure.</li>
-          <li>A shared brand theme so the whole catalog feels connected.</li>
-        </ul>
+      <p id="orderStatus" class="page-status" hidden></p>
+
+      <section class="checkout-grid">
+        <section id="orderSummary"></section>
+
+        <aside class="order-card">
+          <h2>What happens next</h2>
+          <p class="muted">You will use Stripe for payment, and Lobos Shop can fulfill the order from the admin side later.</p>
+          <a class="btn" href="shop.html">Back to shop</a>
+        </aside>
       </section>
     </main>
 
@@ -49,5 +49,6 @@
       <p>Lobos Shop</p>
     </footer>
     <script src="script.js"></script>
+    <script src="success.js"></script>
   </body>
 </html>

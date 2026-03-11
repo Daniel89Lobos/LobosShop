@@ -23,7 +23,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-session": "^1.18.2",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "stripe": "^20.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
