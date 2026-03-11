@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-label="Dummy image for Adult Creative Reset Calendar">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dff1df"/>
+      <stop offset="100%" stop-color="#addbad"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" fill="url(#bg4)"/>
+  <rect x="98" y="88" width="604" height="348" rx="18" fill="#ffffff" opacity="0.85"/>
+  <text x="130" y="188" font-size="42" fill="#253642" font-family="Arial, sans-serif" font-weight="700">Adult Creative</text>
+  <text x="130" y="236" font-size="42" fill="#253642" font-family="Arial, sans-serif" font-weight="700">Reset Calendar</text>
+  <text x="130" y="298" font-size="24" fill="#557064" font-family="Arial, sans-serif">Dummy product image</text>
+  <rect x="130" y="334" width="540" height="14" rx="7" fill="#e8efe8"/>
+  <rect x="130" y="360" width="460" height="14" rx="7" fill="#e8efe8"/>
+</svg>

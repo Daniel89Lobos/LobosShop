@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-label="Dummy cover image for Mapmakers of Moon Bay">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d8eef7"/>
+      <stop offset="100%" stop-color="#9ccde0"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" fill="url(#bg2)"/>
+  <rect x="90" y="98" width="620" height="324" rx="18" fill="#ffffff" opacity="0.84"/>
+  <text x="122" y="188" font-size="42" fill="#1e3140" font-family="Arial, sans-serif" font-weight="700">Mapmakers of</text>
+  <text x="122" y="236" font-size="42" fill="#1e3140" font-family="Arial, sans-serif" font-weight="700">Moon Bay</text>
+  <text x="122" y="292" font-size="24" fill="#4c6575" font-family="Arial, sans-serif">Dummy cover image</text>
+  <text x="122" y="332" font-size="24" fill="#4c6575" font-family="Arial, sans-serif">Middle readers</text>
+</svg>

@@ -1,7 +1,7 @@
 {
   "name": "step-challenge-backend",
   "version": "1.0.0",
-  "description": "Backend API for Step Challenge Web Application",
+  "description": "Backend API for Lobos Shop Web Application",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

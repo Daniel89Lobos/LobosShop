@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shop | Lobos Shop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html">Lobos Shop</a>
+      <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
+      <nav id="siteNav" class="site-nav">
+        <a href="index.html">Home</a>
+        <a class="active" href="shop.html">Shop</a>
+        <a href="about.html">About</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="shop-top content-panel">
+        <div>
+          <h1>Shop</h1>
+          <p>One shared theme: storytelling, creativity, and practical routines.</p>
+        </div>
+      </section>
+
+      <section class="filter-row">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="books">Books (9-12)</button>
+        <button class="filter-btn" data-filter="calendars">Hobby Calendars</button>
+      </section>
+
+      <section class="cards" style="margin-top: 1rem">
+        <article class="card product-card" data-category="books">
+          <img class="product-image" src="assets/images/book-lantern.svg" alt="Dummy cover for The Lantern Trail Club" />
+          <div class="card-tag">Book</div>
+          <h3>The Lantern Trail Club</h3>
+          <p>Adventure mystery chapter book, age 9-12.</p>
+          <p class="price">$16.00</p>
+          <p class="small-note">Dummy text: includes chapter map and bonus activity pages.</p>
+        </article>
+        <article class="card product-card" data-category="books">
+          <img class="product-image" src="assets/images/book-mapmakers.svg" alt="Dummy cover for Mapmakers of Moon Bay" />
+          <div class="card-tag">Book</div>
+          <h3>Mapmakers of Moon Bay</h3>
+          <p>Teamwork and creativity story for middle readers.</p>
+          <p class="price">$18.00</p>
+          <p class="small-note">Dummy text: ideal for classroom and home reading circles.</p>
+        </article>
+        <article class="card product-card" data-category="calendars">
+          <img class="product-image" src="assets/images/calendar-adult.svg" alt="Dummy image for Adult Creative Reset Calendar" />
+          <div class="card-tag">Calendar</div>
+          <h3>Adult Creative Reset Calendar</h3>
+          <p>Daily quick prompts for adults building hobby habits.</p>
+          <p class="price">$20.00</p>
+          <p class="small-note">Dummy text: monthly tracker pages and weekly reflection prompts.</p>
+        </article>
+        <article class="card product-card" data-category="calendars">
+          <img class="product-image" src="assets/images/calendar-family.svg" alt="Dummy image for Family Hobby Year Planner" />
+          <div class="card-tag">Calendar</div>
+          <h3>Family Hobby Year Planner</h3>
+          <p>Monthly family activities with low-prep ideas.</p>
+          <p class="price">$22.00</p>
+          <p class="small-note">Dummy text: weekend activity blocks and memory page placeholders.</p>
+        </article>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Lobos Shop</p>
+    </footer>
+    <script src="script.js"></script>
+  </body>
+</html>

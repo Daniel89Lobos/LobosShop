@@ -1,4 +1,4 @@
-# Step Challenge
+# Lobos Shop
 
 Full-stack step tracking app with an Express backend, PostgreSQL database, and static frontend.
 
@@ -77,7 +77,7 @@ server {
     listen 80;
     server_name _;
 
-    root /var/www/StepChallenge/server/public;
+    root /var/www/LobosShop/server/public;
     index index.html;
 
     location / {
@@ -99,7 +99,7 @@ server {
 
 ```bash
 npm install -g pm2
-cd /var/www/StepChallenge/server
+cd /var/www/LobosShop/server
 pm2 start server.js --name step-challenge
 pm2 save
 pm2 startup

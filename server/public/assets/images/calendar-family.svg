@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" role="img" aria-label="Dummy image for Family Hobby Year Planner">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe4df"/>
+      <stop offset="100%" stop-color="#f7b6a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" fill="url(#bg3)"/>
+  <rect x="106" y="78" width="588" height="364" rx="16" fill="#fff" opacity="0.86"/>
+  <rect x="142" y="128" width="516" height="32" rx="8" fill="#f0f2f5"/>
+  <rect x="142" y="178" width="240" height="36" rx="8" fill="#ffe5da"/>
+  <rect x="418" y="178" width="240" height="36" rx="8" fill="#ffe5da"/>
+  <text x="142" y="268" font-size="42" fill="#2a3440" font-family="Arial, sans-serif" font-weight="700">Family Hobby</text>
+  <text x="142" y="316" font-size="42" fill="#2a3440" font-family="Arial, sans-serif" font-weight="700">Year Planner</text>
+  <text x="142" y="364" font-size="22" fill="#5d6570" font-family="Arial, sans-serif">Dummy product image</text>
+</svg>

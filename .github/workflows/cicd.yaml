@@ -21,7 +21,7 @@ jobs:
             source ~/.bashrc
             nvm use v22
             npm install -g pm2
-            cd /srv/wwwroot/StepChallenge
+            cd /srv/wwwroot/LobosShop
             git pull
             npm ci
             cd server/

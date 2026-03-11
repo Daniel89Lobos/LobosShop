@@ -2,213 +2,97 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Step Challenge Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lobos Shop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header>
-      <h1>Step Challenge 2026</h1>
-      <div class="header-buttons">
-        <button id="optionBtn">Options</button>
-        <button id="logoutBtn">Logout</button>
-      </div>
+    <header class="site-header">
+      <a class="brand" href="index.html">Lobos Shop</a>
+      <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
+      <nav id="siteNav" class="site-nav">
+        <a class="active" href="index.html">Home</a>
+        <a href="shop.html">Shop</a>
+        <a href="about.html">About</a>
+        <a href="faq.html">FAQ</a>
+        <a href="contact.html">Contact</a>
+      </nav>
     </header>
 
     <main>
-      <!-- Login -->
-      <form id="loginForm">
-        <h2>Welcome!</h2>
-        <label for="username">Username:</label> <br />
-        <input
-          id="username"
-          type="text"
-          required
-          placeholder="Enter your username"
-        /><br /><br />
-        <label for="password">Password:</label> <br />
-        <input
-          id="password"
-          type="password"
-          required
-          placeholder="Enter your password"
-          autocomplete="off"
-        />
-        <button id="toggleLoginPassword" type="button">Show</button>
-        <br /><br />
-
-        <div class="button-row">
-          <button id="enter" type="submit">Enter</button>
-          <button id="registerNewUser" type="button">Register new user</button>
+      <section class="hero">
+        <p class="eyebrow">For families who love meaningful play</p>
+        <h1>Books for 9-12 year olds and hobby calendars for adults and families.</h1>
+        <p>
+          We create story-rich products that make reading, creativity, and everyday
+          routines feel exciting and practical.
+        </p>
+        <div class="hero-actions">
+          <a class="btn" href="shop.html">Browse the shop</a>
+          <a class="btn btn-secondary" href="about.html">Our story</a>
         </div>
-
-        <p id="loginFeedback"></p>
-      </form>
-
-      <!-- Step entry -->
-      <form id="stepsForm" style="display: none">
-        <h2>Add steps</h2>
-        <p id="welcome"></p>
-        <label for="steps">Steps walked:</label><br />
-        <input
-          id="steps"
-          type="number"
-          min="1"
-          required
-          placeholder="Enter your steps"
-          autocomplete="off"
-        /><br /><br />
-
-        <label for="stepDate">Date:</label><br />
-        <input id="stepDate" type="date" required /><br /><br />
-
-        <div class="button-container">
-          <button type="submit">Add</button>
-        </div>
-        <p id="stepFeedback"></p>
-      </form>
-
-      <!-- Individual Leaderboard -->
-      <section id="individualLeaderboardSection" style="display: none">
-        <h2>Individual Leaderboard</h2>
-        <button id="clearIndividualBtn" type="button">Clear leaderboard</button>
-        <button id="showIndividualBtn">Individual leaderboard</button>
-        <button id="showGroupBtn">Group leaderboard</button><br /><br />
-        <table id="individualLeaderboard">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>Total Steps</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
       </section>
 
-      <!-- Group Leaderboard --->
-      <section id="groupLeaderboardSection" style="display: none">
-        <h2>Group Leaderboard</h2>
-        <button id="clearGroupBtn" type="button">Clear leaderboard</button>
-        <button id="showIndividualBtnFromGroup">Individual leaderboard</button>
-        <button id="showGroupBtn">Group leaderboard</button><br /><br />
-        <table id="groupLeaderboard">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Group</th>
-              <th>Total Steps</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <section class="split-grid">
+        <article class="panel">
+          <h2>Children's Books (Ages 9-12)</h2>
+          <p>
+            Chapter-ready stories built to encourage curiosity, confidence, and
+            imagination.
+          </p>
+          <a class="text-link" href="shop.html">See book collection</a>
+        </article>
+        <article class="panel">
+          <h2>Hobby Calendars</h2>
+          <p>
+            Monthly guided calendars designed for adults and family time, with
+            simple hobby prompts.
+          </p>
+          <a class="text-link" href="shop.html">See calendars</a>
+        </article>
       </section>
 
-      <!-- Options --->
-      <form id="options" style="display: none">
-        <h2>Options</h2>
-        <button id="changePasswordBtn" type="button">Change password</button>
-        <br /><br />
-        <button id="changeGroupBtn" type="button">Change group</button>
-        <br /><br />
-        <button id="changeStepsBtn" type="button">Change steps</button>
-        <br /><br />
-        <div class="button-row">
-          <button id="backBtnOptions" type="button">Back</button>
-          <button id="saveBtnOptions" type="submit">Save</button>
+      <section class="featured">
+        <h2>Featured Products</h2>
+        <div class="cards">
+          <article class="card">
+            <img class="product-image" src="assets/images/book-lantern.svg" alt="Dummy cover for The Lantern Trail Club" />
+            <div class="card-tag">Book</div>
+            <h3>The Lantern Trail Club</h3>
+            <p>Adventure chapter book for ages 9-12 with mystery maps and friendship challenges.</p>
+            <p class="price">$16.00</p>
+            <p class="small-note">Dummy text: paperback, 180 pages, release month placeholder.</p>
+          </article>
+          <article class="card">
+            <img class="product-image" src="assets/images/calendar-family.svg" alt="Dummy image for Family Hobby Year Planner" />
+            <div class="card-tag">Calendar</div>
+            <h3>Family Hobby Year Planner</h3>
+            <p>12 months of weekend and evening hobby ideas with easy prompts.</p>
+            <p class="price">$22.00</p>
+            <p class="small-note">Dummy text: printed wall format, monthly themes placeholder.</p>
+          </article>
+          <article class="card">
+            <img class="product-image" src="assets/images/calendar-adult.svg" alt="Dummy image for Adult Creative Reset Calendar" />
+            <div class="card-tag">Calendar</div>
+            <h3>Adult Creative Reset Calendar</h3>
+            <p>Daily prompts focused on low-stress creative habits and consistency.</p>
+            <p class="price">$20.00</p>
+            <p class="small-note">Dummy text: 365 prompts, desk format placeholder.</p>
+          </article>
         </div>
-      </form>
-
-      <!-- Change password --->
-      <form id="changePasswordOptions" style="display: none">
-        <h2>Change password</h2>
-        <input
-          id="changePassword"
-          type="password"
-          required
-          placeholder="Enter new password"
-        />
-        <button id="togglePassword" type="button">Show</button> <br /><br />
-
-        <div class="button-row">
-          <button id="backBtnChangePassword" type="button">Back</button>
-          <button id="saveBtnChangePassword" type="submit">Save</button>
-        </div>
-      </form>
-
-      <!-- Change group --->
-      <form id="changeGroupOptions" style="display: none">
-        <h2>Change group</h2>
-        <input
-          id="changeGroup"
-          type="text"
-          required
-          placeholder="Enter new group: "
-          autocomplete="off"
-        />
-
-        <div class="button-row">
-          <button id="backBtnChangeGroup" type="button">Back</button>
-          <button id="saveBtnChangeGroup" type="submit">Save</button>
-        </div>
-      </form>
-
-      <!-- Change steps --->
-      <form id="changeStepsOptions" style="display: none">
-        <h2>Change steps</h2>
-        <input
-          id="changeSteps"
-          type="text"
-          required
-          placeholder="Enter amount of steps: "
-          autocomplete="off"
-        /><br /><br />
-        <label for="stepChangeDate">Date:</label><br />
-        <input id="stepChangeDate" type="date" required /><br /><br />
-        <div id="stepLogDisplay" class="step-log-display"></div>
-        <!-- Steps Calendar -->
-        <div class="button-row">
-          <button id="backBtnChangeSteps" type="button">Back</button>
-          <button id="saveBtnChangeSteps" type="submit">Save</button>
-        </div>
-      </form>
-
-      <!-- Register new user --->
-      <form id="registrationForm">
-        <h2>Register new user</h2>
-        <label for="newUsername">Username:</label><br />
-        <input
-          id="newUsername"
-          type="text"
-          required
-          placeholder="Enter your name"
-          autocomplete="off"
-        />
-        <br /><br />
-        <label for="newPassword">Password:</label><br />
-        <input
-          id="newPassword"
-          type="password"
-          required
-          placeholder="Enter your password"
-          autocomplete="off"
-        />
-        <button type="button" id="toggleRegisterPassword">Show</button>
-        <br /><br />
-        <label for="group">Group:</label><br />
-        <input
-          id="group"
-          type="text"
-          required
-          placeholder="Enter your group (for example KN)"
-          autocomplete="off"
-        /><br /><br />
-
-        <div class="button-row">
-          <button id="backBtnRegister" type="button">Back</button>
-          <button id="createNewUser" type="submit">Create</button>
-        </div>
-      </form>
+      </section>
     </main>
+
+    <footer class="site-footer">
+      <p>Lobos Shop</p>
+      <p>Books and calendars with one shared creative theme.</p>
+    </footer>
 
     <script src="script.js"></script>
   </body>
