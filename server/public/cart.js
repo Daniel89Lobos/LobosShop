@@ -9,6 +9,26 @@ let cartProducts = [];
 let shippingAmount = 0;
 let catalogSource = "api";
 
+function getCategoryLabel(category) {
+  if (category === "books") {
+    return "Book";
+  }
+
+  if (category === "calendars") {
+    return "Calendar";
+  }
+
+  if (category === "amigurumi") {
+    return "Amigurumi";
+  }
+
+  return "Product";
+}
+
+function getProductShopHref(product) {
+  return `shop.html?category=${encodeURIComponent(product.category)}#product-${product.slug}`;
+}
+
 function showCartNotice(message, type = "error") {
   if (!cartNotice) {
     return;
@@ -106,8 +126,11 @@ function renderCart() {
       (item) => `
         <article class="cart-row">
           <div class="cart-line-main">
-            <img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" />
+            <a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} in shop">
+              <img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" />
+            </a>
             <div class="cart-line-meta">
+              <span class="card-tag cart-category-tag">${getCategoryLabel(item.product.category)}</span>
               <h3>${item.product.name}</h3>
               <p class="muted">${item.product.description}</p>
               <p class="muted">${item.product.price} each</p>
@@ -130,8 +153,9 @@ function renderCart() {
       (item) => `
         <article class="cart-row">
           <div class="cart-line-main">
-            ${item.product ? `<img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" />` : ""}
+            ${item.product ? `<a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} in shop"><img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" /></a>` : ""}
             <div class="cart-line-meta">
+              ${item.product ? `<span class="card-tag cart-category-tag">${getCategoryLabel(item.product.category)}</span>` : ""}
               <h3>${item.product ? item.product.name : `Product #${item.productId}`}</h3>
               <p class="muted">${item.reason}</p>
               <button class="link-btn" type="button" data-action="remove" data-product-id="${item.productId}">Remove from cart</button>
