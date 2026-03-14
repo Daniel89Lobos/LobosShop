@@ -61,6 +61,21 @@
       "stripeTaxCode": null
     },
     {
+      "id": 7,
+      "slug": "dog",
+      "name": "Dog",
+      "description": "Handmade crochet dog in a cozy green sweater, created as a cheerful shelf companion or thoughtful gift.",
+      "category": "amigurumi",
+      "unitAmount": 19000,
+      "currency": "sek",
+      "price": "190,00 kr",
+      "stockQuantity": 10,
+      "stockStatus": "in_stock",
+      "imagePath": "assets/images/amigurumi-dog.jpg",
+      "active": true,
+      "stripeTaxCode": null
+    },
+    {
       "id": 5,
       "slug": "forest-friend-fox",
       "name": "Forest Friend Fox",
