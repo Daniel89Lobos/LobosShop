@@ -151,6 +151,38 @@ window.LobosStore = {
       source: "fallback",
     };
   },
+
+  async fetchProduct(slug) {
+    if (!slug) {
+      throw new Error("Missing product slug.");
+    }
+
+    try {
+      const apiResponse = await fetch(`/api/products/${encodeURIComponent(slug)}`);
+
+      if (apiResponse.ok) {
+        const apiData = await apiResponse.json();
+        return {
+          ...apiData,
+          source: "api",
+        };
+      }
+    } catch (error) {
+    }
+
+    const fallbackResponse = await fetch(FALLBACK_PRODUCTS_PATH);
+    const fallbackData = await fallbackResponse.json();
+    const product = (fallbackData.products || []).find((item) => item.slug === slug);
+
+    if (!product) {
+      throw new Error("Product not found.");
+    }
+
+    return {
+      product,
+      source: "fallback",
+    };
+  },
 };
 
 const menuToggle = document.getElementById("menuToggle");

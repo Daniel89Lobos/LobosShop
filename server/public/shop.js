@@ -17,6 +17,10 @@ function getCategoryLabel(category) {
   return "Product";
 }
 
+function getProductDetailHref(product) {
+  return `product.html?slug=${encodeURIComponent(product.slug)}`;
+}
+
 function highlightRequestedProduct() {
   if (!window.location.hash.startsWith("#product-")) {
     return;
@@ -88,13 +92,17 @@ function renderProducts(products) {
   productGrid.innerHTML = products
     .map((product) => {
       const stock = getStockLabel(product);
+      const detailHref = getProductDetailHref(product);
 
       return `
         <article id="product-${product.slug}" class="card product-card card-stack" data-category="${product.category}" data-slug="${product.slug}">
-          <img class="product-image" src="${product.imagePath}" alt="${product.name}" />
+          <a class="product-image-link" href="${detailHref}">
+            <img class="product-image" src="${product.imagePath}" alt="${product.name}" />
+          </a>
           <div class="card-tag">${getCategoryLabel(product.category)}</div>
-          <h3>${product.name}</h3>
+          <h3><a class="product-title-link" href="${detailHref}">${product.name}</a></h3>
           <p>${product.description}</p>
+          <a class="text-link" href="${detailHref}">View details</a>
           <p class="price">${product.price}</p>
           <div class="card-footer">
             <span class="${stock.className}">${stock.text}</span>
