@@ -17,6 +17,25 @@ function getCategoryLabel(category) {
   return "Product";
 }
 
+function highlightRequestedProduct() {
+  if (!window.location.hash.startsWith("#product-")) {
+    return;
+  }
+
+  const target = document.getElementById(window.location.hash.slice(1));
+
+  if (!target) {
+    return;
+  }
+
+  target.classList.add("is-targeted");
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  window.setTimeout(() => {
+    target.classList.remove("is-targeted");
+  }, 2200);
+}
+
 function showShopNotice(message, type = "error") {
   if (!shopNotice) {
     return;
@@ -71,7 +90,7 @@ function renderProducts(products) {
       const stock = getStockLabel(product);
 
       return `
-        <article class="card product-card card-stack" data-category="${product.category}">
+        <article id="product-${product.slug}" class="card product-card card-stack" data-category="${product.category}" data-slug="${product.slug}">
           <img class="product-image" src="${product.imagePath}" alt="${product.name}" />
           <div class="card-tag">${getCategoryLabel(product.category)}</div>
           <h3>${product.name}</h3>
@@ -97,8 +116,11 @@ async function loadProducts() {
 
   try {
     const data = await window.LobosStore.fetchCatalog();
+    const initialCategory = window.LobosShopFilters ? window.LobosShopFilters.getInitialCategory() : "all";
 
     renderProducts(data.products || []);
+    window.LobosShopFilters?.apply(initialCategory, { updateUrl: false });
+    highlightRequestedProduct();
 
     if (data.source === "fallback") {
       showShopNotice(

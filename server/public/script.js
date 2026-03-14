@@ -164,19 +164,57 @@ if (menuToggle && siteNav) {
 
 const filterButtons = document.querySelectorAll(".filter-btn");
 
+function getInitialShopCategory() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("category") || "all";
+}
+
+function getValidShopCategory(category) {
+  return Array.from(filterButtons).some((button) => button.dataset.filter === category)
+    ? category
+    : "all";
+}
+
+function updateShopCategoryUrl(category) {
+  const url = new URL(window.location.href);
+
+  if (category === "all") {
+    url.searchParams.delete("category");
+  } else {
+    url.searchParams.set("category", category);
+  }
+
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function applyShopFilter(category = "all", options = {}) {
+  const nextCategory = getValidShopCategory(category);
+  const productCards = document.querySelectorAll(".product-card");
+
+  filterButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === nextCategory);
+  });
+
+  productCards.forEach((card) => {
+    card.style.display = nextCategory === "all" || card.dataset.category === nextCategory ? "block" : "none";
+  });
+
+  if (options.updateUrl !== false) {
+    updateShopCategoryUrl(nextCategory);
+  }
+
+  return nextCategory;
+}
+
+window.LobosShopFilters = {
+  apply: applyShopFilter,
+  getInitialCategory: getInitialShopCategory,
+};
+
 if (filterButtons.length > 0) {
   filterButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const category = button.dataset.filter;
-      const productCards = document.querySelectorAll(".product-card");
-
-      filterButtons.forEach((btn) => btn.classList.remove("active"));
-      button.classList.add("active");
-
-      productCards.forEach((card) => {
-        card.style.display =
-          category === "all" || card.dataset.category === category ? "block" : "none";
-      });
+      applyShopFilter(button.dataset.filter);
     });
   });
 }
