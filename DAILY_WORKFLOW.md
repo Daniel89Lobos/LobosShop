@@ -36,7 +36,6 @@ Deploy latest code:
 
 ```bash
 cd /var/www/LobosShop
-git pull origin main
 ```
 
 After this step, you can refresh the website (F5) and you will see the updates.

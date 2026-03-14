@@ -26,7 +26,7 @@ function getCategoryLabel(category) {
 }
 
 function getProductShopHref(product) {
-  return `shop.html?category=${encodeURIComponent(product.category)}#product-${product.slug}`;
+  return `product.html?slug=${encodeURIComponent(product.slug)}`;
 }
 
 function showCartNotice(message, type = "error") {
@@ -126,12 +126,12 @@ function renderCart() {
       (item) => `
         <article class="cart-row">
           <div class="cart-line-main">
-            <a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} in shop">
+            <a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} details">
               <img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" />
             </a>
             <div class="cart-line-meta">
               <span class="card-tag cart-category-tag">${getCategoryLabel(item.product.category)}</span>
-              <h3>${item.product.name}</h3>
+              <h3><a class="cart-product-link" href="${getProductShopHref(item.product)}">${item.product.name}</a></h3>
               <p class="muted">${item.product.description}</p>
               <p class="muted">${item.product.price} each</p>
               <div class="qty-control">
@@ -153,10 +153,10 @@ function renderCart() {
       (item) => `
         <article class="cart-row">
           <div class="cart-line-main">
-            ${item.product ? `<a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} in shop"><img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" /></a>` : ""}
+            ${item.product ? `<a class="cart-thumb-link" href="${getProductShopHref(item.product)}" aria-label="View ${item.product.name} details"><img class="cart-thumb" src="${item.product.imagePath}" alt="${item.product.name}" /></a>` : ""}
             <div class="cart-line-meta">
               ${item.product ? `<span class="card-tag cart-category-tag">${getCategoryLabel(item.product.category)}</span>` : ""}
-              <h3>${item.product ? item.product.name : `Product #${item.productId}`}</h3>
+              <h3>${item.product ? `<a class="cart-product-link" href="${getProductShopHref(item.product)}">${item.product.name}</a>` : `Product #${item.productId}`}</h3>
               <p class="muted">${item.reason}</p>
               <button class="link-btn" type="button" data-action="remove" data-product-id="${item.productId}">Remove from cart</button>
             </div>
