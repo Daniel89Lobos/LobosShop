@@ -59,6 +59,18 @@ INSERT INTO products (
     NULL
   ),
   (
+    'dog',
+    'Dog',
+    'Handmade crochet dog in a cozy green sweater, created as a cheerful shelf companion or thoughtful gift.',
+    'amigurumi',
+    19000,
+    'sek',
+    10,
+    'assets/images/amigurumi-dog.jpg',
+    true,
+    NULL
+  ),
+  (
     'forest-friend-fox',
     'Forest Friend Fox',
     'Handmade crochet fox with a soft finish for gifting, shelf display, or imaginative play.',
