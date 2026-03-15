@@ -149,15 +149,19 @@ async function loadProducts() {
 if (productGrid) {
   loadProducts();
 
-  productGrid.addEventListener("click", (event) => {
+  productGrid.addEventListener("click", async (event) => {
     const addButton = event.target.closest("[data-add-to-cart]");
 
     if (!addButton) {
       return;
     }
 
-    const productId = Number.parseInt(addButton.dataset.addToCart, 10);
-    window.LobosCart.addItem(productId, 1);
-    showShopNotice("Added to cart. You can keep browsing or review your cart now.", "success");
+    try {
+      const productId = Number.parseInt(addButton.dataset.addToCart, 10);
+      await window.LobosCart.addItem(productId, 1);
+      showShopNotice("Added to cart. You can keep browsing or review your cart now.", "success");
+    } catch (error) {
+      showShopNotice(error.message || "Could not add this product to your cart.");
+    }
   });
 }

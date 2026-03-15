@@ -1,5 +1,5 @@
 {
-  "name": "step-challenge-backend",
+  "name": "lobos-shop-backend",
   "version": "1.0.0",
   "description": "Backend API for Lobos Shop Web Application",
   "main": "server.js",
@@ -11,9 +11,9 @@
   "keywords": [
     "express",
     "postgresql",
-    "step-challenge",
-    "fitness",
-    "leaderboard"
+    "lobos-shop",
+    "ecommerce",
+    "stripe"
   ],
   "author": "Your Name",
   "license": "MIT",

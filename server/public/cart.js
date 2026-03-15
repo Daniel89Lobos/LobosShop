@@ -183,7 +183,7 @@ async function loadCartProducts() {
   }
 
   try {
-    const data = await window.LobosStore.fetchCatalog();
+    const [, data] = await Promise.all([window.LobosCart.ready, window.LobosStore.fetchCatalog()]);
 
     cartProducts = data.products || [];
     shippingAmount = Number(data.shipping?.amount || 0);
@@ -211,7 +211,7 @@ async function loadCartProducts() {
 if (cartItemsRoot) {
   loadCartProducts();
 
-  cartItemsRoot.addEventListener("click", (event) => {
+  cartItemsRoot.addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-action]");
 
     if (!actionButton) {
@@ -223,30 +223,31 @@ if (cartItemsRoot) {
     const existingItem = window.LobosCart.getItems().find((item) => item.productId === productId);
     const product = cartProducts.find((item) => item.id === productId);
 
-    if (action === "remove") {
-      window.LobosCart.removeItem(productId);
-      renderCart();
-      return;
-    }
-
-    if (!existingItem) {
-      return;
-    }
-
-    if (action === "decrement") {
-      window.LobosCart.updateItem(productId, existingItem.quantity - 1);
-      renderCart();
-      return;
-    }
-
-    if (action === "increment") {
-      if (product && existingItem.quantity >= product.stockQuantity) {
-        showCartNotice(`${product.name} is already at the maximum available quantity.`);
+    try {
+      if (action === "remove") {
+        await window.LobosCart.removeItem(productId);
         return;
       }
 
-      window.LobosCart.updateItem(productId, existingItem.quantity + 1);
-      renderCart();
+      if (!existingItem) {
+        return;
+      }
+
+      if (action === "decrement") {
+        await window.LobosCart.updateItem(productId, existingItem.quantity - 1);
+        return;
+      }
+
+      if (action === "increment") {
+        if (product && existingItem.quantity >= product.stockQuantity) {
+          showCartNotice(`${product.name} is already at the maximum available quantity.`);
+          return;
+        }
+
+        await window.LobosCart.updateItem(productId, existingItem.quantity + 1);
+      }
+    } catch (error) {
+      showCartNotice(error.message || "Could not update your cart.");
     }
   });
 

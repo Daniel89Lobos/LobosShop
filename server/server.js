@@ -368,8 +368,20 @@ function parseCartMetadata(rawValue) {
   }
 }
 
-function normalizeCartItems(items) {
-  if (!Array.isArray(items) || items.length === 0) {
+function normalizeCartItems(items, options = {}) {
+  const { allowEmpty = false } = options;
+
+  if (!Array.isArray(items)) {
+    const error = new Error("Cart payload is invalid");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (items.length === 0) {
+    if (allowEmpty) {
+      return [];
+    }
+
     const error = new Error("Your cart is empty");
     error.statusCode = 400;
     throw error;
@@ -437,6 +449,56 @@ async function loadProductsByIds(productIds, client = pool) {
     "SELECT * FROM products WHERE id = ANY($1::int[]) AND active = true",
     [productIds],
   );
+}
+
+async function loadUserCart(userId, client = pool) {
+  const result = await client.query(
+    `SELECT product_id, quantity
+     FROM cart_items
+     WHERE user_id = $1
+     ORDER BY id ASC`,
+    [userId],
+  );
+
+  return result.rows.map((row) => ({
+    productId: Number(row.product_id),
+    quantity: Number(row.quantity),
+  }));
+}
+
+async function replaceUserCart(userId, items) {
+  const normalizedItems = normalizeCartItems(items, { allowEmpty: true });
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM cart_items WHERE user_id = $1", [userId]);
+
+    if (normalizedItems.length > 0) {
+      const values = [];
+      const placeholders = normalizedItems
+        .map((item, index) => {
+          const baseIndex = index * 3;
+          values.push(userId, item.productId, item.quantity);
+          return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
+        })
+        .join(", ");
+
+      await client.query(
+        `INSERT INTO cart_items (user_id, product_id, quantity)
+         VALUES ${placeholders}`,
+        values,
+      );
+    }
+
+    await client.query("COMMIT");
+    return normalizedItems;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function prepareCheckoutCart(items) {
@@ -539,6 +601,24 @@ app.get("/api/products/:slug", async (req, res) => {
     }
 
     res.json({ product: serializeProduct(result.rows[0]) });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.get("/api/cart", requireAuth, async (req, res) => {
+  try {
+    const items = await loadUserCart(req.session.userId);
+    res.json({ items });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.put("/api/cart", requireAuth, async (req, res) => {
+  try {
+    const items = await replaceUserCart(req.session.userId, req.body.items);
+    res.json({ items });
   } catch (error) {
     handleShopError(error, res);
   }
@@ -816,119 +896,11 @@ app.put("/api/user/group", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/steps", requireAuth, async (req, res) => {
-  try {
-    const { date, steps } = req.body;
-
-    if (!date || steps === undefined || steps < 0) {
-      return res
-        .status(400)
-        .json({ error: "Valid date and steps (>=0) are required" });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO step_logs (user_id, log_date, steps)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, log_date)
-       DO UPDATE SET steps = $3, updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [req.session.userId, date, Number.parseInt(steps, 10)],
-    );
-
-    res.json({
-      message: "Steps updated successfully",
-      stepLog: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Steps update error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.get("/api/steps", requireAuth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT log_date, steps FROM step_logs WHERE user_id = $1 ORDER BY log_date DESC",
-      [req.session.userId],
-    );
-
-    const stepLog = {};
-
-    result.rows.forEach((row) => {
-      stepLog[row.log_date.toISOString().split("T")[0]] = row.steps;
-    });
-
-    res.json({ stepLog });
-  } catch (error) {
-    console.error("Get steps error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.get("/api/leaderboard/individual", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        u.username,
-        u.group_name,
-        COALESCE(SUM(sl.steps), 0) AS total_steps
-      FROM users u
-      LEFT JOIN step_logs sl ON u.id = sl.user_id
-      GROUP BY u.id, u.username, u.group_name
-      ORDER BY total_steps DESC
-    `);
-
-    res.json({ leaderboard: result.rows });
-  } catch (error) {
-    console.error("Individual leaderboard error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.get("/api/leaderboard/group", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        u.group_name,
-        SUM(COALESCE(sl.steps, 0)) AS total_steps,
-        COUNT(DISTINCT u.id) AS member_count
-      FROM users u
-      LEFT JOIN step_logs sl ON u.id = sl.user_id
-      GROUP BY u.group_name
-      ORDER BY total_steps DESC
-    `);
-
-    res.json({ leaderboard: result.rows });
-  } catch (error) {
-    console.error("Group leaderboard error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.delete("/api/leaderboard/individual", requireAuth, async (req, res) => {
-  try {
-    await pool.query("DELETE FROM step_logs");
-    res.json({ message: "Individual leaderboard cleared successfully" });
-  } catch (error) {
-    console.error("Clear individual leaderboard error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.delete("/api/leaderboard/group", requireAuth, async (req, res) => {
-  try {
-    await pool.query("DELETE FROM step_logs");
-    res.json({ message: "Group leaderboard cleared successfully" });
-  } catch (error) {
-    console.error("Clear group leaderboard error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 app.get("/api/auth/check", (req, res) => {
   if (req.session.userId) {
     return res.json({
       authenticated: true,
+      userId: req.session.userId,
       username: req.session.username,
     });
   }

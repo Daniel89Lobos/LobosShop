@@ -160,7 +160,7 @@ async function loadProduct() {
 if (productContent) {
   loadProduct();
 
-  productContent.addEventListener("click", (event) => {
+  productContent.addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-product-action]");
 
     if (!actionButton || !currentProduct) {
@@ -182,8 +182,12 @@ if (productContent) {
     }
 
     if (action === "add") {
-      window.LobosCart.addItem(currentProduct.id, selectedQuantity);
-      showProductNotice("Added to cart. You can keep browsing or review your cart now.", "success");
+      try {
+        await window.LobosCart.addItem(currentProduct.id, selectedQuantity);
+        showProductNotice("Added to cart. You can keep browsing or review your cart now.", "success");
+      } catch (error) {
+        showProductNotice(error.message || "Could not add this product to your cart.");
+      }
     }
   });
 }
