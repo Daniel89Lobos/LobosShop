@@ -93,7 +93,7 @@ async function loadOrderSummary(attempt = 0) {
 
     showOrderStatus("Payment confirmed. Your order is now in the system.", "success");
     renderOrder(data.order);
-    window.LobosCart.clear();
+    await window.LobosCart.clear();
   } catch (error) {
     showOrderStatus(error.message, "error");
   }
