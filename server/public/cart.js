@@ -24,6 +24,7 @@ let cartProducts = [];
 let shippingAmount = 0;
 let catalogSource = "api";
 const defaultCheckoutButtonLabel = checkoutButton ? checkoutButton.textContent : "Continue to Stripe Checkout";
+const checkoutGateViews = [checkoutGateChoice, checkoutLoginForm, checkoutRegisterForm].filter(Boolean);
 
 function getCategoryLabel(category) {
   if (category === "books") {
@@ -105,22 +106,37 @@ function clearCheckoutRegisterNotice() {
   checkoutRegisterNotice.textContent = "";
 }
 
+function hideAllCheckoutGateViews() {
+  checkoutGateViews.forEach((element) => {
+    element.hidden = true;
+    element.setAttribute("aria-hidden", "true");
+  });
+}
+
 function showCheckoutGateView(view) {
   if (!checkoutGateChoice || !checkoutLoginForm || !checkoutRegisterForm) {
     return;
   }
 
-  checkoutGateChoice.hidden = view !== "choice";
-  checkoutLoginForm.hidden = view !== "login";
-  checkoutRegisterForm.hidden = view !== "register";
+  hideAllCheckoutGateViews();
+
+  const viewMap = {
+    choice: checkoutGateChoice,
+    login: checkoutLoginForm,
+    register: checkoutRegisterForm,
+  };
+  const activeView = viewMap[view] || checkoutGateChoice;
+
+  activeView.hidden = false;
+  activeView.setAttribute("aria-hidden", "false");
 
   if (checkoutGate?.hidden) {
     return;
   }
 
-  if (view === "login") {
+  if (activeView === checkoutLoginForm) {
     checkoutUsernameInput?.focus();
-  } else if (view === "register") {
+  } else if (activeView === checkoutRegisterForm) {
     checkoutRegisterUsernameInput?.focus();
   } else {
     guestCheckoutButton?.focus();
@@ -135,6 +151,7 @@ function openCheckoutGate(view = "choice") {
   clearCheckoutAuthNotice();
   clearCheckoutRegisterNotice();
   checkoutGate.hidden = false;
+  checkoutGate.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
   showCheckoutGateView(view);
 }
@@ -145,6 +162,7 @@ function closeCheckoutGate() {
   }
 
   checkoutGate.hidden = true;
+  checkoutGate.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-open");
   clearCheckoutAuthNotice();
   clearCheckoutRegisterNotice();
@@ -475,6 +493,8 @@ if (cartItemsRoot) {
 }
 
 if (checkoutGate) {
+  closeCheckoutGate();
+
   checkoutGate.addEventListener("click", (event) => {
     if (event.target.closest("[data-gate-close]")) {
       closeCheckoutGate();

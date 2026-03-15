@@ -499,6 +499,12 @@ body.modal-open {
   overflow: hidden;
 }
 
+[hidden],
+.checkout-gate[hidden],
+.checkout-gate [hidden] {
+  display: none !important;
+}
+
 .checkout-gate {
   position: fixed;
   inset: 0;
