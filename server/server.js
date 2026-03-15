@@ -23,6 +23,10 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? require("stripe")(process.env.STRIPE_SECRET_KEY)
   : null;
 
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is required");
+}
+
 const paymentMethodTypes = (process.env.STRIPE_PAYMENT_METHOD_TYPES || "")
   .split(",")
   .map((value) => value.trim())
@@ -267,7 +271,7 @@ app.use(
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "your-secret-key-change-this",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
