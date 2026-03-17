@@ -4,6 +4,7 @@ const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
+const connectPgSimple = require("connect-pg-simple");
 const cors = require("cors");
 const multer = require("multer");
 require("dotenv").config();
@@ -41,6 +42,7 @@ const paymentMethodTypes = (process.env.STRIPE_PAYMENT_METHOD_TYPES || "")
 
 const enabledPaymentMethodTypes =
   paymentMethodTypes.length > 0 ? paymentMethodTypes : DEFAULT_PAYMENT_METHOD_TYPES;
+const PostgresSessionStore = connectPgSimple(session);
 
 fs.mkdirSync(PRODUCT_UPLOAD_DIR, { recursive: true });
 
@@ -130,6 +132,12 @@ const pool = new Pool({
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT || 5432,
+});
+
+const sessionStore = new PostgresSessionStore({
+  pool,
+  tableName: "user_sessions",
+  createTableIfMissing: true,
 });
 
 // Stripe webhook must receive the raw body before JSON parsing.
@@ -360,10 +368,13 @@ app.use(
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
     },
   }),
