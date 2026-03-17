@@ -718,7 +718,7 @@ function renderProductList() {
                   <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
                 </label>
                 <div class="admin-inline-actions">
-                  <button class="btn btn-secondary" type="button" data-upload-image>Upload image</button>
+                  <button class="btn btn-secondary" type="button" data-upload-image>Save image</button>
                   <button class="btn btn-secondary" type="button" data-clear-image>Clear image</button>
                 </div>
               </div>
@@ -831,7 +831,7 @@ function previewSelectedImageFile(form) {
   markPendingImageUpload(form, true);
   setProductImagePreview(form, getImagePathInput(form)?.value || "", {
     previewUrl,
-    label: `Selected: ${imageFileInput.files[0].name}. Upload image to save it.`,
+    label: `Selected: ${imageFileInput.files[0].name}. Save image to keep it.`,
   });
 }
 
@@ -856,7 +856,7 @@ async function uploadSelectedImage(form, triggerButton) {
 
   if (triggerButton) {
     triggerButton.disabled = true;
-    triggerButton.textContent = "Uploading...";
+    triggerButton.textContent = "Saving...";
   }
 
   try {
@@ -874,7 +874,7 @@ async function uploadSelectedImage(form, triggerButton) {
   } finally {
     if (triggerButton) {
       triggerButton.disabled = false;
-      triggerButton.textContent = "Upload image";
+      triggerButton.textContent = "Save image";
     }
   }
 }
