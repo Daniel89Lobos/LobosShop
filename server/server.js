@@ -55,6 +55,46 @@ function getUploadFileExtension(file) {
   return byMimeType[file.mimetype] || path.extname(file.originalname || "").toLowerCase();
 }
 
+function isManagedUploadImagePath(imagePath) {
+  return typeof imagePath === "string" && imagePath.startsWith(`${PRODUCT_UPLOAD_WEB_PATH}/`);
+}
+
+async function maybeDeleteManagedUploadImage(client, imagePath, ignoredProductId = null) {
+  if (!isManagedUploadImagePath(imagePath)) {
+    return;
+  }
+
+  const params = [imagePath];
+  let duplicateQuery = "SELECT COUNT(*)::int AS count FROM products WHERE image_path = $1";
+
+  if (Number.isInteger(ignoredProductId) && ignoredProductId > 0) {
+    params.push(ignoredProductId);
+    duplicateQuery += ` AND id <> $${params.length}`;
+  }
+
+  const duplicateResult = await client.query(duplicateQuery, params);
+
+  if (duplicateResult.rows[0].count > 0) {
+    return;
+  }
+
+  const relativePath = imagePath.slice(`${PRODUCT_UPLOAD_WEB_PATH}/`.length);
+
+  if (!relativePath) {
+    return;
+  }
+
+  const absolutePath = path.join(PRODUCT_UPLOAD_DIR, relativePath);
+
+  try {
+    await fs.promises.unlink(absolutePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Could not remove uploaded product image:", error);
+    }
+  }
+}
+
 const productImageUpload = multer({
   storage: multer.diskStorage({
     destination(req, file, callback) {
@@ -1456,6 +1496,54 @@ app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
     }
   } catch (error) {
     handleShopError(error, res);
+  }
+});
+
+app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const productId = Number.parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return res.status(400).json({ error: "Invalid product id" });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const existingProduct = await client.query(
+        "SELECT id, name, image_path FROM products WHERE id = $1 FOR UPDATE",
+        [productId],
+      );
+
+      if (existingProduct.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const product = existingProduct.rows[0];
+
+      await client.query("DELETE FROM products WHERE id = $1", [productId]);
+      await maybeDeleteManagedUploadImage(client, product.image_path, productId);
+
+      await client.query("COMMIT");
+      res.json({
+        message: "Product deleted",
+        product: {
+          id: productId,
+          name: product.name,
+        },
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("Delete product error:", error);
+    res.status(500).json({ error: "Could not delete product" });
   }
 });
 
