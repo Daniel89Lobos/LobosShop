@@ -204,6 +204,7 @@ function renderOrderHistory(orders) {
               <h4>Order #${order.id}</h4>
               <p class="muted">Placed ${formatAccountDate(order.createdAt)}</p>
               <p class="muted account-order-status-copy">${escapeHtml(customerStatus.detail)}</p>
+              ${order.customerNote ? `<p class="account-customer-note"><strong>Message from Lobos Shop:</strong> ${escapeHtml(order.customerNote)}</p>` : ""}
             </div>
             <span class="status-pill ${getOrderStatusClass(order.fulfillmentStatus)}">${escapeHtml(customerStatus.label)}</span>
           </div>

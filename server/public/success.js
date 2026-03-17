@@ -27,6 +27,15 @@ function showOrderStatus(message, type = "") {
   orderStatus.textContent = message;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function getCustomerOrderStatus(status) {
   if (status === "paid") {
     return {
@@ -91,6 +100,7 @@ function renderOrder(order) {
       <p class="muted">Payment: ${getCustomerPaymentLabel(order.paymentStatus)}</p>
       <p class="muted">Status: ${customerStatus.label}</p>
       <p class="muted">${customerStatus.detail}</p>
+      ${order.customerNote ? `<p><strong>Message from Lobos Shop:</strong> ${escapeHtml(order.customerNote)}</p>` : ""}
       <p class="muted">Email: ${order.customerEmail || "Captured in Stripe"}</p>
       <div class="order-list">
         ${order.items
