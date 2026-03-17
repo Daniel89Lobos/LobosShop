@@ -170,6 +170,15 @@ h1 {
   border: 1px solid var(--line);
 }
 
+.btn-danger {
+  background: #b94b58;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #9d3b47;
+}
+
 .split-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

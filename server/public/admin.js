@@ -600,6 +600,8 @@ function renderProductList() {
 
             <div class="admin-inline-actions">
               <button class="btn btn-secondary" type="submit">Save product</button>
+              <button class="btn btn-secondary" type="button" data-product-toggle-visibility>${product.active ? "Hide product" : "Show product"}</button>
+              <button class="btn btn-danger" type="button" data-product-delete>Delete product</button>
               ${product.active ? `<a class="text-link" href="${productHref}" target="_blank" rel="noreferrer">Open product page</a>` : '<span class="muted">Archived products are hidden from the storefront.</span>'}
             </div>
           </form>
@@ -782,6 +784,59 @@ function buildProductPayload(form) {
     stripeTaxCode: String(formData.get("stripeTaxCode") || "").trim(),
     active: formData.get("active") === "on",
   };
+}
+
+async function saveProductForm(form, options = {}) {
+  const productId = form.dataset.productId;
+  const payload = {
+    ...buildProductPayload(form),
+    ...options,
+  };
+  const button = form.querySelector('button[type="submit"]');
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    await fetchAdminJson(`/api/admin/products/${productId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  } finally {
+    if (button && form.isConnected) {
+      button.disabled = false;
+    }
+  }
+}
+
+async function toggleProductVisibility(form) {
+  const activeInput = form.querySelector('input[name="active"]');
+  const nextActive = !(activeInput?.checked);
+  const productName = form.querySelector('input[name="name"]')?.value?.trim() || "Product";
+
+  await saveProductForm(form, { active: nextActive });
+  showAdminNotice(`${productName} is now ${nextActive ? "visible in the storefront" : "hidden from the storefront"}.`, "success");
+  await loadAdminProducts();
+}
+
+async function deleteProduct(form) {
+  const productId = form.dataset.productId;
+  const productName = form.querySelector('input[name="name"]')?.value?.trim() || "this product";
+  const confirmed = window.confirm(
+    `Delete ${productName}? This permanently removes it from the catalog and storefront. Existing order records will keep the old product name only.`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  await fetchAdminJson(`/api/admin/products/${productId}`, {
+    method: "DELETE",
+  });
+
+  showAdminNotice(`${productName} was deleted.`, "success");
+  await loadAdminProducts();
 }
 
 function resetCreateProductForm() {
@@ -975,8 +1030,10 @@ function bindProductManagement() {
   adminProducts.addEventListener("click", async (event) => {
     const uploadButton = event.target.closest("[data-upload-image]");
     const clearButton = event.target.closest("[data-clear-image]");
+    const toggleVisibilityButton = event.target.closest("[data-product-toggle-visibility]");
+    const deleteButton = event.target.closest("[data-product-delete]");
 
-    if (!uploadButton && !clearButton) {
+    if (!uploadButton && !clearButton && !toggleVisibilityButton && !deleteButton) {
       return;
     }
 
@@ -995,6 +1052,34 @@ function bindProductManagement() {
       return;
     }
 
+    if (toggleVisibilityButton) {
+      try {
+        toggleVisibilityButton.disabled = true;
+        await toggleProductVisibility(form);
+      } catch (error) {
+        showAdminNotice(error.message || "Could not update product visibility.");
+      } finally {
+        if (toggleVisibilityButton.isConnected) {
+          toggleVisibilityButton.disabled = false;
+        }
+      }
+      return;
+    }
+
+    if (deleteButton) {
+      try {
+        deleteButton.disabled = true;
+        await deleteProduct(form);
+      } catch (error) {
+        showAdminNotice(error.message || "Could not delete this product.");
+      } finally {
+        if (deleteButton.isConnected) {
+          deleteButton.disabled = false;
+        }
+      }
+      return;
+    }
+
     clearSelectedImage(form);
   });
 
@@ -1008,29 +1093,12 @@ function bindProductManagement() {
     event.preventDefault();
 
     try {
-      const productId = form.dataset.productId;
-      const payload = buildProductPayload(form);
-      const button = form.querySelector('button[type="submit"]');
-
-      if (button) {
-        button.disabled = true;
-      }
-
-      await fetchAdminJson(`/api/admin/products/${productId}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
+      await saveProductForm(form);
 
       showAdminNotice("Product updated.", "success");
       await loadAdminProducts();
     } catch (error) {
       showAdminNotice(error.message || "Could not update this product.");
-    } finally {
-      const button = form.querySelector('button[type="submit"]');
-
-      if (button && form.isConnected) {
-        button.disabled = false;
-      }
     }
   });
 }
