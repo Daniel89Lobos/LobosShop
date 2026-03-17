@@ -1,9 +1,11 @@
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
 const cors = require("cors");
+const multer = require("multer");
 require("dotenv").config();
 
 const app = express();
@@ -17,6 +19,11 @@ const STANDARD_SHIPPING_AMOUNT = 4900;
 const CART_METADATA_KEY = "cart_items";
 const SHIPPING_METADATA_KEY = "shipping_amount";
 const LOW_STOCK_THRESHOLD = 5;
+const PRODUCT_CATEGORIES = ["books", "calendars", "amigurumi"];
+const PRODUCT_CATEGORY_SET = new Set(PRODUCT_CATEGORIES);
+const PRODUCT_UPLOAD_DIR = path.join(PUBLIC_DIR, "assets", "uploads");
+const PRODUCT_UPLOAD_WEB_PATH = "assets/uploads";
+const PRODUCT_IMAGE_UPLOAD_LIMIT = 5 * 1024 * 1024;
 const DEFAULT_PAYMENT_METHOD_TYPES = ["card", "klarna", "swish"];
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -34,6 +41,47 @@ const paymentMethodTypes = (process.env.STRIPE_PAYMENT_METHOD_TYPES || "")
 
 const enabledPaymentMethodTypes =
   paymentMethodTypes.length > 0 ? paymentMethodTypes : DEFAULT_PAYMENT_METHOD_TYPES;
+
+fs.mkdirSync(PRODUCT_UPLOAD_DIR, { recursive: true });
+
+function getUploadFileExtension(file) {
+  const byMimeType = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+  };
+
+  return byMimeType[file.mimetype] || path.extname(file.originalname || "").toLowerCase();
+}
+
+const productImageUpload = multer({
+  storage: multer.diskStorage({
+    destination(req, file, callback) {
+      callback(null, PRODUCT_UPLOAD_DIR);
+    },
+    filename(req, file, callback) {
+      const originalBaseName = path.basename(file.originalname || "image", path.extname(file.originalname || ""));
+      const safeBaseName = slugifyProductValue(originalBaseName) || "product-image";
+      const extension = getUploadFileExtension(file);
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      callback(null, `${safeBaseName}-${uniqueSuffix}${extension}`);
+    },
+  }),
+  limits: {
+    fileSize: PRODUCT_IMAGE_UPLOAD_LIMIT,
+  },
+  fileFilter(req, file, callback) {
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype)) {
+      const error = new Error("Only JPG, PNG, WebP, and GIF images are supported");
+      error.statusCode = 400;
+      callback(error);
+      return;
+    }
+
+    callback(null, true);
+  },
+});
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -374,6 +422,120 @@ function buildOrderResponse(order, items = []) {
       quantity: Number(item.quantity),
       lineTotal: Number(item.line_total),
     })),
+  };
+}
+
+function serializeAdminProduct(product) {
+  return {
+    ...serializeProduct(product),
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+  };
+}
+
+function slugifyProductValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function parseBooleanInput(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "no", "off", ""].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+}
+
+function normalizeAdminProductPayload(payload) {
+  const name = String(payload.name || "").trim();
+  const rawSlug = String(payload.slug || "").trim();
+  const slug = slugifyProductValue(rawSlug || name);
+  const description = String(payload.description || "").trim();
+  const category = String(payload.category || "").trim().toLowerCase();
+  const unitAmount = Number.parseInt(String(payload.unitAmount || ""), 10);
+  const stockQuantity = Number.parseInt(String(payload.stockQuantity || ""), 10);
+  const imagePath = String(payload.imagePath || "").trim();
+  const stripeTaxCode = String(payload.stripeTaxCode || "").trim() || null;
+  const active = parseBooleanInput(payload.active);
+  const currency = String(payload.currency || SHOP_CURRENCY)
+    .trim()
+    .toLowerCase();
+
+  if (!name) {
+    const error = new Error("Product name is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!slug) {
+    const error = new Error("Slug is required and must use letters, numbers, or hyphens");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!description) {
+    const error = new Error("Product description is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!PRODUCT_CATEGORY_SET.has(category)) {
+    const error = new Error("Choose a valid product category");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!Number.isInteger(unitAmount) || unitAmount < 0) {
+    const error = new Error("Price must be a valid amount in ore");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+    const error = new Error("Stock quantity must be zero or higher");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!imagePath) {
+    const error = new Error("Image path is required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (currency !== SHOP_CURRENCY) {
+    const error = new Error(`Only ${SHOP_CURRENCY.toUpperCase()} products are supported right now`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    slug,
+    name,
+    description,
+    category,
+    unitAmount,
+    currency,
+    stockQuantity,
+    imagePath,
+    active,
+    stripeTaxCode,
   };
 }
 
@@ -944,7 +1106,7 @@ app.put("/api/user/group", requireAuth, async (req, res) => {
 
 app.get("/api/admin/summary", requireAdmin, async (req, res) => {
   try {
-    const [userStats, orderStats] = await Promise.all([
+    const [userStats, orderStats, productStats] = await Promise.all([
       pool.query(
         `SELECT
            COUNT(*)::int AS total_users,
@@ -957,6 +1119,14 @@ app.get("/api/admin/summary", requireAdmin, async (req, res) => {
            COUNT(*) FILTER (WHERE fulfillment_status NOT IN ('fulfilled', 'cancelled'))::int AS pending_orders
          FROM orders`,
       ),
+      pool.query(
+        `SELECT
+           COUNT(*)::int AS total_products,
+           COUNT(*) FILTER (WHERE active = true)::int AS active_products,
+           COUNT(*) FILTER (WHERE active = true AND stock_quantity > 0 AND stock_quantity <= $1)::int AS low_stock_products
+         FROM products`,
+        [LOW_STOCK_THRESHOLD],
+      ),
     ]);
 
     res.json({
@@ -965,6 +1135,9 @@ app.get("/api/admin/summary", requireAdmin, async (req, res) => {
         adminUsers: userStats.rows[0].admin_users,
         totalOrders: orderStats.rows[0].total_orders,
         pendingOrders: orderStats.rows[0].pending_orders,
+        totalProducts: productStats.rows[0].total_products,
+        activeProducts: productStats.rows[0].active_products,
+        lowStockProducts: productStats.rows[0].low_stock_products,
       },
     });
   } catch (error) {
@@ -1089,6 +1262,200 @@ app.get("/api/admin/users", requireAdmin, async (req, res) => {
   } catch (error) {
     console.error("Admin users error:", error);
     res.status(500).json({ error: "Could not load users" });
+  }
+});
+
+app.post("/api/admin/product-images", requireAdmin, (req, res) => {
+  productImageUpload.single("image")(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "Image must be 5 MB or smaller" });
+      }
+
+      return res.status(400).json({ error: error.message || "Could not upload image" });
+    }
+
+    if (error) {
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({ error: error.message || "Could not upload image" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Choose an image to upload" });
+    }
+
+    return res.status(201).json({
+      imagePath: `${PRODUCT_UPLOAD_WEB_PATH}/${req.file.filename}`,
+      filename: req.file.filename,
+      size: req.file.size,
+    });
+  });
+});
+
+app.get("/api/admin/products", requireAdmin, async (req, res) => {
+  try {
+    const includeInactive = String(req.query.includeInactive || "true").trim().toLowerCase() !== "false";
+    const category = String(req.query.category || "all").trim().toLowerCase();
+    const params = [];
+    const whereClauses = [];
+
+    if (!includeInactive) {
+      whereClauses.push("active = true");
+    }
+
+    if (category !== "all") {
+      if (!PRODUCT_CATEGORY_SET.has(category)) {
+        return res.status(400).json({ error: "Invalid product category" });
+      }
+
+      params.push(category);
+      whereClauses.push(`category = $${params.length}`);
+    }
+
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    const result = await pool.query(
+      `SELECT *
+       FROM products
+       ${whereClause}
+       ORDER BY active DESC, updated_at DESC, id DESC
+       LIMIT 300`,
+      params,
+    );
+
+    res.json({
+      products: result.rows.map(serializeAdminProduct),
+      categories: PRODUCT_CATEGORIES,
+      currency: SHOP_CURRENCY.toUpperCase(),
+      lowStockThreshold: LOW_STOCK_THRESHOLD,
+    });
+  } catch (error) {
+    console.error("Admin products error:", error);
+    res.status(500).json({ error: "Could not load products" });
+  }
+});
+
+app.post("/api/admin/products", requireAdmin, async (req, res) => {
+  try {
+    const productInput = normalizeAdminProductPayload(req.body || {});
+    const duplicateProduct = await pool.query(
+      "SELECT id FROM products WHERE slug = $1 LIMIT 1",
+      [productInput.slug],
+    );
+
+    if (duplicateProduct.rows.length > 0) {
+      return res.status(400).json({ error: "A product with this slug already exists" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO products (
+         slug,
+         name,
+         description,
+         category,
+         unit_amount,
+         currency,
+         stock_quantity,
+         image_path,
+         active,
+         stripe_tax_code
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+       )
+       RETURNING *`,
+      [
+        productInput.slug,
+        productInput.name,
+        productInput.description,
+        productInput.category,
+        productInput.unitAmount,
+        productInput.currency,
+        productInput.stockQuantity,
+        productInput.imagePath,
+        productInput.active,
+        productInput.stripeTaxCode,
+      ],
+    );
+
+    res.status(201).json({ product: serializeAdminProduct(result.rows[0]) });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const productId = Number.parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return res.status(400).json({ error: "Invalid product id" });
+    }
+
+    const productInput = normalizeAdminProductPayload(req.body || {});
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const existingProduct = await client.query(
+        "SELECT id FROM products WHERE id = $1 FOR UPDATE",
+        [productId],
+      );
+
+      if (existingProduct.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const duplicateProduct = await client.query(
+        "SELECT id FROM products WHERE slug = $1 AND id <> $2 LIMIT 1",
+        [productInput.slug, productId],
+      );
+
+      if (duplicateProduct.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "A product with this slug already exists" });
+      }
+
+      const result = await client.query(
+        `UPDATE products
+         SET slug = $1,
+             name = $2,
+             description = $3,
+             category = $4,
+             unit_amount = $5,
+             currency = $6,
+             stock_quantity = $7,
+             image_path = $8,
+             active = $9,
+             stripe_tax_code = $10,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $11
+         RETURNING *`,
+        [
+          productInput.slug,
+          productInput.name,
+          productInput.description,
+          productInput.category,
+          productInput.unitAmount,
+          productInput.currency,
+          productInput.stockQuantity,
+          productInput.imagePath,
+          productInput.active,
+          productInput.stripeTaxCode,
+          productId,
+        ],
+      );
+
+      await client.query("COMMIT");
+      res.json({ product: serializeAdminProduct(result.rows[0]) });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    handleShopError(error, res);
   }
 });
 
