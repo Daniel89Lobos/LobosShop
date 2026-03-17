@@ -49,6 +49,10 @@ function formatAccountDate(value) {
 }
 
 function getOrderStatusClass(status) {
+  if (status === "paid") {
+    return "processing";
+  }
+
   if (status === "fulfilled") {
     return "in-stock";
   }
@@ -62,6 +66,41 @@ function getOrderStatusClass(status) {
   }
 
   return "";
+}
+
+function getCustomerOrderStatus(status) {
+  if (status === "paid") {
+    return {
+      label: "Processing",
+      detail: "We have your payment and are preparing your order now.",
+    };
+  }
+
+  if (status === "fulfilled") {
+    return {
+      label: "Shipped",
+      detail: "Your order has been fulfilled and is on the way.",
+    };
+  }
+
+  if (status === "inventory_issue") {
+    return {
+      label: "Needs attention",
+      detail: "We are reviewing stock for this order and will update you soon.",
+    };
+  }
+
+  if (status === "cancelled") {
+    return {
+      label: "Cancelled",
+      detail: "This order has been cancelled.",
+    };
+  }
+
+  return {
+    label: String(status || "Order update"),
+    detail: "We will keep your order status updated here.",
+  };
 }
 
 async function fetchProfile() {
@@ -147,15 +186,18 @@ function renderOrderHistory(orders) {
   }
 
   accountOrders.innerHTML = orders
-    .map(
-      (order) => `
+    .map((order) => {
+      const customerStatus = getCustomerOrderStatus(order.fulfillmentStatus);
+
+      return `
         <article class="account-order-card">
           <div class="account-order-header">
             <div>
               <h4>Order #${order.id}</h4>
               <p class="muted">Placed ${formatAccountDate(order.createdAt)}</p>
+              <p class="muted account-order-status-copy">${escapeHtml(customerStatus.detail)}</p>
             </div>
-            <span class="status-pill ${getOrderStatusClass(order.fulfillmentStatus)}">${escapeHtml(order.fulfillmentStatus.replace(/_/g, " "))}</span>
+            <span class="status-pill ${getOrderStatusClass(order.fulfillmentStatus)}">${escapeHtml(customerStatus.label)}</span>
           </div>
           <div class="account-order-meta">
             <p><strong>Total:</strong> ${window.LobosCart.formatMoney(order.totalAmount, order.currency)}</p>
@@ -179,8 +221,8 @@ function renderOrderHistory(orders) {
               .join("")}
           </section>
         </article>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
