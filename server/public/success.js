@@ -27,12 +27,48 @@ function showOrderStatus(message, type = "") {
   orderStatus.textContent = message;
 }
 
+function getCustomerOrderStatus(status) {
+  if (status === "paid") {
+    return {
+      label: "Processing",
+      detail: "We have your payment and are preparing your order now.",
+    };
+  }
+
+  if (status === "fulfilled") {
+    return {
+      label: "Shipped",
+      detail: "Your order has been fulfilled and is on the way.",
+    };
+  }
+
+  if (status === "inventory_issue") {
+    return {
+      label: "Needs attention",
+      detail: "We are reviewing stock for this order and will update you soon.",
+    };
+  }
+
+  if (status === "cancelled") {
+    return {
+      label: "Cancelled",
+      detail: "This order has been cancelled.",
+    };
+  }
+
+  return {
+    label: String(status || "Order update"),
+    detail: "We will keep your order status updated here.",
+  };
+}
+
 function renderOrder(order) {
   if (!orderSummary) {
     return;
   }
 
   const address = parseAddress(order.shippingAddress);
+  const customerStatus = getCustomerOrderStatus(order.fulfillmentStatus);
   const addressLines = [
     address?.name,
     address?.address?.line1,
@@ -45,7 +81,8 @@ function renderOrder(order) {
     <section class="order-card">
       <h2>Order #${order.id}</h2>
       <p class="muted">Payment: ${order.paymentStatus}</p>
-      <p class="muted">Fulfillment: ${order.fulfillmentStatus}</p>
+      <p class="muted">Status: ${customerStatus.label}</p>
+      <p class="muted">${customerStatus.detail}</p>
       <p class="muted">Email: ${order.customerEmail || "Captured in Stripe"}</p>
       <div class="order-list">
         ${order.items

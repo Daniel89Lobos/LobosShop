@@ -443,6 +443,12 @@ h1 {
   border: 1px solid transparent;
 }
 
+.status-pill.processing {
+  background: #eaf2fb;
+  color: #24537a;
+  border-color: #c7d8ec;
+}
+
 .status-pill.in-stock {
   background: #edf7f1;
   color: #1f6f43;
@@ -960,6 +966,10 @@ body.modal-open {
 .account-order-meta p,
 .account-order-item p {
   margin: 0;
+}
+
+.account-order-status-copy {
+  margin-top: 0.35rem;
 }
 
 .account-order-meta {
