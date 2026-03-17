@@ -3,11 +3,38 @@ const adminTotalUsers = document.getElementById("adminTotalUsers");
 const adminAdminUsers = document.getElementById("adminAdminUsers");
 const adminPendingOrders = document.getElementById("adminPendingOrders");
 const adminTotalOrders = document.getElementById("adminTotalOrders");
+const adminTotalProducts = document.getElementById("adminTotalProducts");
+const adminLowStockProducts = document.getElementById("adminLowStockProducts");
 const adminOrders = document.getElementById("adminOrders");
 const adminUsers = document.getElementById("adminUsers");
+const adminProducts = document.getElementById("adminProducts");
 const refreshOrdersButton = document.getElementById("refreshOrdersButton");
 const refreshUsersButton = document.getElementById("refreshUsersButton");
+const refreshProductsButton = document.getElementById("refreshProductsButton");
+const adminProductCreateForm = document.getElementById("adminProductCreateForm");
+const adminProductNameInput = document.getElementById("adminProductName");
+const adminProductSlugInput = document.getElementById("adminProductSlug");
+const adminProductSearchInput = document.getElementById("adminProductSearch");
+const adminProductCategoryFilter = document.getElementById("adminProductCategoryFilter");
+const adminProductStatusFilter = document.getElementById("adminProductStatusFilter");
+const adminProductResults = document.getElementById("adminProductResults");
+
 const expandedOrderDetails = new Map();
+
+let adminProductMeta = {
+  categories: ["books", "calendars", "amigurumi"],
+  currency: "SEK",
+  lowStockThreshold: 5,
+};
+
+const adminProductState = {
+  products: [],
+  filters: {
+    search: "",
+    category: "all",
+    status: "all",
+  },
+};
 
 function showAdminNotice(message, type = "error") {
   if (!adminNotice) {
@@ -29,6 +56,32 @@ function clearAdminNotice() {
   adminNotice.textContent = "";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatAdminDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleString("sv-SE");
+}
+
+function slugifyValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\"']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 async function fetchAdminJson(url, options = {}) {
   const response = await fetch(url, {
     credentials: "include",
@@ -48,11 +101,68 @@ async function fetchAdminJson(url, options = {}) {
   return data;
 }
 
+async function uploadProductImage(file) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const response = await fetch("/api/admin/product-images", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not upload image");
+  }
+
+  return data;
+}
+
+function clearAdminLists() {
+  if (adminOrders) {
+    adminOrders.innerHTML = "";
+  }
+
+  if (adminUsers) {
+    adminUsers.innerHTML = "";
+  }
+
+  if (adminProducts) {
+    adminProducts.innerHTML = "";
+  }
+}
+
 function renderStats(stats) {
   adminTotalUsers.textContent = String(stats.totalUsers || 0);
   adminAdminUsers.textContent = String(stats.adminUsers || 0);
   adminPendingOrders.textContent = String(stats.pendingOrders || 0);
   adminTotalOrders.textContent = String(stats.totalOrders || 0);
+
+  if (adminTotalProducts) {
+    adminTotalProducts.textContent = String(stats.totalProducts || 0);
+  }
+
+  if (adminLowStockProducts) {
+    adminLowStockProducts.textContent = String(stats.lowStockProducts || 0);
+  }
+}
+
+function getOrderStatusClass(status) {
+  if (status === "fulfilled") {
+    return "in-stock";
+  }
+
+  if (status === "inventory_issue") {
+    return "low-stock";
+  }
+
+  if (status === "cancelled") {
+    return "out-of-stock";
+  }
+
+  return "";
 }
 
 function renderOrders(orders) {
@@ -77,15 +187,15 @@ function renderOrders(orders) {
           <div class="admin-card-header">
             <div>
               <h3>Order #${order.id}</h3>
-              <p class="muted">${order.customer_name || order.customer_email || "Guest checkout"}</p>
+              <p class="muted">${escapeHtml(order.customer_name || order.customer_email || "Guest checkout")}</p>
             </div>
-            <span class="status-pill ${order.fulfillment_status === "fulfilled" ? "in-stock" : "out-of-stock"}">${order.fulfillment_status.replace(/_/g, " ")}</span>
+            <span class="status-pill ${getOrderStatusClass(order.fulfillment_status)}">${escapeHtml(order.fulfillment_status.replace(/_/g, " "))}</span>
           </div>
           <div class="admin-meta-grid">
-            <p><strong>Payment:</strong> ${order.payment_status}</p>
+            <p><strong>Payment:</strong> ${escapeHtml(order.payment_status)}</p>
             <p><strong>Items:</strong> ${order.item_count}</p>
             <p><strong>Total:</strong> ${window.LobosCart.formatMoney(order.total_amount)}</p>
-            <p><strong>Created:</strong> ${new Date(order.created_at).toLocaleString("sv-SE")}</p>
+            <p><strong>Created:</strong> ${formatAdminDate(order.created_at)}</p>
           </div>
           <form class="admin-inline-form" data-order-form data-order-id="${order.id}">
             <label>
@@ -136,14 +246,14 @@ function renderOrderDetailMarkup(order) {
     <div class="admin-detail-grid">
       <section>
         <h4>Customer</h4>
-        <p><strong>Name:</strong> ${order.customerName || shipping.name || "Guest checkout"}</p>
-        <p><strong>Email:</strong> ${order.customerEmail || "-"}</p>
-        <p><strong>Phone:</strong> ${order.phone || shipping.phone || "-"}</p>
+        <p><strong>Name:</strong> ${escapeHtml(order.customerName || shipping.name || "Guest checkout")}</p>
+        <p><strong>Email:</strong> ${escapeHtml(order.customerEmail || "-")}</p>
+        <p><strong>Phone:</strong> ${escapeHtml(order.phone || shipping.phone || "-")}</p>
       </section>
       <section>
         <h4>Shipping</h4>
         ${renderAddressLines(shippingAddress)
-          .map((line) => `<p>${line}</p>`)
+          .map((line) => `<p>${escapeHtml(line)}</p>`)
           .join("")}
       </section>
     </div>
@@ -154,7 +264,7 @@ function renderOrderDetailMarkup(order) {
           (item) => `
             <div class="admin-order-line">
               <div>
-                <strong>${item.productName}</strong>
+                <strong>${escapeHtml(item.productName)}</strong>
                 <p class="muted">${item.quantity} x ${window.LobosCart.formatMoney(item.unitAmount, currency)}</p>
               </div>
               <strong>${window.LobosCart.formatMoney(item.lineTotal, currency)}</strong>
@@ -201,7 +311,7 @@ async function toggleOrderDetails(orderId, toggleButton) {
       toggleButton.textContent = "Hide details";
     }
   } catch (error) {
-    detailContainer.innerHTML = `<p class="page-status is-error">${error.message || "Could not load order details."}</p>`;
+    detailContainer.innerHTML = `<p class="page-status is-error">${escapeHtml(error.message || "Could not load order details.")}</p>`;
   }
 }
 
@@ -226,15 +336,15 @@ function renderUsers(users) {
         <article class="admin-card">
           <div class="admin-card-header">
             <div>
-              <h3>${user.username}</h3>
-              <p class="muted">Created ${new Date(user.created_at).toLocaleString("sv-SE")}</p>
+              <h3>${escapeHtml(user.username)}</h3>
+              <p class="muted">Created ${formatAdminDate(user.created_at)}</p>
             </div>
             <span class="status-pill ${user.is_admin ? "in-stock" : ""}">${user.is_admin ? "Admin" : "Customer"}</span>
           </div>
           <form class="admin-inline-form" data-user-form data-user-id="${user.id}">
             <label>
               Username
-              <input name="username" type="text" value="${user.username}" required />
+              <input name="username" type="text" value="${escapeHtml(user.username)}" required />
             </label>
             <label>
               New password <span class="muted">(optional)</span>
@@ -252,6 +362,475 @@ function renderUsers(users) {
     .join("");
 }
 
+function getCategoryLabel(category) {
+  if (category === "books") {
+    return "Books";
+  }
+
+  if (category === "calendars") {
+    return "Calendars";
+  }
+
+  if (category === "amigurumi") {
+    return "Amigurumi";
+  }
+
+  return "Product";
+}
+
+function getProductStatus(product) {
+  if (!product.active) {
+    return {
+      className: "",
+      label: "Archived",
+      key: "archived",
+      note: "Hidden from the storefront until re-enabled.",
+    };
+  }
+
+  if (product.stockStatus === "out_of_stock") {
+    return {
+      className: "out-of-stock",
+      label: "Out of stock",
+      key: "out_of_stock",
+      note: "Visible in the catalog but unavailable for checkout.",
+    };
+  }
+
+  if (product.stockStatus === "low_stock") {
+    return {
+      className: "low-stock",
+      label: `Low stock (${product.stockQuantity})`,
+      key: "low_stock",
+      note: `Only ${product.stockQuantity} left before the item is out of stock.`,
+    };
+  }
+
+  return {
+    className: "in-stock",
+    label: "In stock",
+    key: "active",
+    note: `Healthy stock level. Low-stock warning starts at ${adminProductMeta.lowStockThreshold}.`,
+  };
+}
+
+function getProductCategoryOptions(selectedCategory) {
+  return adminProductMeta.categories
+    .map(
+      (category) => `<option value="${category}"${category === selectedCategory ? " selected" : ""}>${getCategoryLabel(category)}</option>`,
+    )
+    .join("");
+}
+
+function formatPriceInputValue(unitAmount) {
+  return (Number(unitAmount || 0) / 100).toFixed(2);
+}
+
+function getImagePreviewMarkup(imagePath, imageAlt) {
+  if (!imagePath) {
+    return `
+      <div class="admin-image-preview is-empty" data-image-preview>
+        <span>No image uploaded</span>
+      </div>
+      <p class="muted" data-image-path-label>No image selected yet.</p>
+    `;
+  }
+
+  return `
+    <div class="admin-image-preview" data-image-preview>
+      <img src="${escapeHtml(imagePath)}" alt="${escapeHtml(imageAlt)}" />
+    </div>
+    <p class="muted" data-image-path-label>${escapeHtml(imagePath)}</p>
+  `;
+}
+
+function updateProductResultsLabel(visibleCount, totalCount) {
+  if (!adminProductResults) {
+    return;
+  }
+
+  if (totalCount === 0) {
+    adminProductResults.textContent = "No products saved yet.";
+    return;
+  }
+
+  adminProductResults.textContent = `Showing ${visibleCount} of ${totalCount} products.`;
+}
+
+function productMatchesFilters(product) {
+  const { search, category, status } = adminProductState.filters;
+  const productStatus = getProductStatus(product);
+  const searchHaystack = [product.name, product.slug, product.description, product.imagePath]
+    .join(" ")
+    .toLowerCase();
+
+  if (search && !searchHaystack.includes(search)) {
+    return false;
+  }
+
+  if (category !== "all" && product.category !== category) {
+    return false;
+  }
+
+  if (status === "all") {
+    return true;
+  }
+
+  if (status === "active") {
+    return product.active;
+  }
+
+  return productStatus.key === status;
+}
+
+function getFilteredProducts() {
+  return adminProductState.products.filter(productMatchesFilters);
+}
+
+function renderProductList() {
+  if (!adminProducts) {
+    return;
+  }
+
+  const filteredProducts = getFilteredProducts();
+  updateProductResultsLabel(filteredProducts.length, adminProductState.products.length);
+
+  if (adminProductState.products.length === 0) {
+    adminProducts.innerHTML = `
+      <article class="empty-state">
+        <h3>No products yet</h3>
+        <p>Create your first product to start building the storefront catalog.</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (filteredProducts.length === 0) {
+    adminProducts.innerHTML = `
+      <article class="empty-state">
+        <h3>No products match these filters</h3>
+        <p>Try a different search term or change the category/status filters.</p>
+      </article>
+    `;
+    return;
+  }
+
+  adminProducts.innerHTML = filteredProducts
+    .map((product) => {
+      const stockState = getProductStatus(product);
+      const productHref = `product.html?slug=${encodeURIComponent(product.slug)}`;
+
+      return `
+        <article class="admin-card">
+          <div class="admin-card-header">
+            <div>
+              <h3>${escapeHtml(product.name)}</h3>
+              <p class="muted">/${escapeHtml(product.slug)}</p>
+            </div>
+            <span class="status-pill ${stockState.className}">${escapeHtml(stockState.label)}</span>
+          </div>
+
+          <div class="admin-meta-grid">
+            <p><strong>Price:</strong> ${window.LobosCart.formatMoney(product.unitAmount, product.currency)}</p>
+            <p><strong>Stock:</strong> ${product.stockQuantity}</p>
+            <p><strong>Category:</strong> ${escapeHtml(getCategoryLabel(product.category))}</p>
+            <p><strong>Updated:</strong> ${formatAdminDate(product.updatedAt)}</p>
+          </div>
+
+          <p class="muted admin-card-note">${escapeHtml(stockState.note)}</p>
+
+          <form class="admin-inline-form" data-product-form data-product-id="${product.id}" data-pending-image-upload="false">
+            <div class="admin-form-grid">
+              <label>
+                Product name
+                <input name="name" type="text" value="${escapeHtml(product.name)}" required />
+              </label>
+              <label>
+                Slug
+                <input name="slug" type="text" value="${escapeHtml(product.slug)}" required />
+              </label>
+              <label>
+                Category
+                <select name="category" required>
+                  ${getProductCategoryOptions(product.category)}
+                </select>
+              </label>
+              <label>
+                Price (kr)
+                <input name="price" type="number" min="0" step="0.01" value="${formatPriceInputValue(product.unitAmount)}" required />
+              </label>
+              <label>
+                Stock quantity
+                <input name="stockQuantity" type="number" min="0" step="1" value="${product.stockQuantity}" required />
+              </label>
+              <label>
+                Stripe tax code
+                <input name="stripeTaxCode" type="text" value="${escapeHtml(product.stripeTaxCode || "")}" placeholder="Optional" />
+              </label>
+              <label class="checkbox-row admin-checkbox-field">
+                <input name="active" type="checkbox" ${product.active ? "checked" : ""} />
+                <span>Show in storefront</span>
+              </label>
+            </div>
+
+            <label>
+              Description
+              <textarea name="description" required>${escapeHtml(product.description)}</textarea>
+            </label>
+
+            <section class="admin-image-field">
+              <input name="imagePath" type="hidden" value="${escapeHtml(product.imagePath)}" />
+              <div class="admin-image-preview-wrap">
+                ${getImagePreviewMarkup(product.imagePath, `Preview of ${product.name}`)}
+              </div>
+              <div class="admin-image-controls">
+                <label>
+                  Product image
+                  <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                </label>
+                <div class="admin-inline-actions">
+                  <button class="btn btn-secondary" type="button" data-upload-image>Upload image</button>
+                  <button class="btn btn-secondary" type="button" data-clear-image>Clear image</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="admin-inline-actions">
+              <button class="btn btn-secondary" type="submit">Save product</button>
+              ${product.active ? `<a class="text-link" href="${productHref}" target="_blank" rel="noreferrer">Open product page</a>` : '<span class="muted">Archived products are hidden from the storefront.</span>'}
+            </div>
+          </form>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function parsePriceToMinorUnits(value) {
+  const normalizedValue = String(value || "")
+    .trim()
+    .replace(",", ".");
+  const parsedValue = Number.parseFloat(normalizedValue);
+
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    throw new Error("Enter a valid price in kronor.");
+  }
+
+  return Math.round(parsedValue * 100);
+}
+
+function getImagePathInput(form) {
+  return form?.querySelector('input[name="imagePath"]');
+}
+
+function getImageFileInput(form) {
+  return form?.querySelector('input[name="imageFile"]');
+}
+
+function getImagePreviewContainer(form) {
+  return form?.querySelector("[data-image-preview]");
+}
+
+function getImagePathLabel(form) {
+  return form?.querySelector("[data-image-path-label]");
+}
+
+function getProductImageAlt(form) {
+  const productName = form?.querySelector('input[name="name"]')?.value?.trim();
+  return productName ? `Preview of ${productName}` : "Product image preview";
+}
+
+function revokePreviewUrl(form) {
+  const previousUrl = form?.dataset.previewUrl;
+
+  if (previousUrl) {
+    URL.revokeObjectURL(previousUrl);
+    delete form.dataset.previewUrl;
+  }
+}
+
+function setProductImagePreview(form, imagePath, options = {}) {
+  const { previewUrl = null, label = null } = options;
+  const imagePathInput = getImagePathInput(form);
+  const previewContainer = getImagePreviewContainer(form);
+  const pathLabel = getImagePathLabel(form);
+
+  if (!imagePathInput || !previewContainer || !pathLabel) {
+    return;
+  }
+
+  revokePreviewUrl(form);
+
+  if (previewUrl) {
+    form.dataset.previewUrl = previewUrl;
+  }
+
+  imagePathInput.value = imagePath || "";
+
+  if (previewUrl || imagePath) {
+    previewContainer.classList.remove("is-empty");
+    previewContainer.innerHTML = `<img src="${escapeHtml(previewUrl || imagePath)}" alt="${escapeHtml(getProductImageAlt(form))}" />`;
+    pathLabel.textContent = label || imagePath || "Image selected";
+    return;
+  }
+
+  previewContainer.classList.add("is-empty");
+  previewContainer.innerHTML = "<span>No image uploaded</span>";
+  pathLabel.textContent = "No image selected yet.";
+}
+
+function markPendingImageUpload(form, isPending) {
+  if (!form) {
+    return;
+  }
+
+  form.dataset.pendingImageUpload = isPending ? "true" : "false";
+}
+
+function previewSelectedImageFile(form) {
+  const imageFileInput = getImageFileInput(form);
+
+  if (!imageFileInput?.files?.[0]) {
+    markPendingImageUpload(form, false);
+    setProductImagePreview(form, getImagePathInput(form)?.value || "");
+    return;
+  }
+
+  const previewUrl = URL.createObjectURL(imageFileInput.files[0]);
+  markPendingImageUpload(form, true);
+  setProductImagePreview(form, getImagePathInput(form)?.value || "", {
+    previewUrl,
+    label: `Selected: ${imageFileInput.files[0].name}. Upload image to save it.`,
+  });
+}
+
+function clearSelectedImage(form) {
+  const imageFileInput = getImageFileInput(form);
+
+  if (imageFileInput) {
+    imageFileInput.value = "";
+  }
+
+  markPendingImageUpload(form, false);
+  setProductImagePreview(form, "");
+}
+
+async function uploadSelectedImage(form, triggerButton) {
+  const imageFileInput = getImageFileInput(form);
+  const file = imageFileInput?.files?.[0];
+
+  if (!file) {
+    throw new Error("Choose an image before uploading.");
+  }
+
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.textContent = "Uploading...";
+  }
+
+  try {
+    const data = await uploadProductImage(file);
+    markPendingImageUpload(form, false);
+    setProductImagePreview(form, data.imagePath, {
+      label: data.imagePath,
+    });
+    if (imageFileInput) {
+      imageFileInput.value = "";
+    }
+    showAdminNotice("Image uploaded.", "success");
+  } finally {
+    if (triggerButton) {
+      triggerButton.disabled = false;
+      triggerButton.textContent = "Upload image";
+    }
+  }
+}
+
+function buildProductPayload(form) {
+  const formData = new FormData(form);
+  const stockQuantity = Number.parseInt(String(formData.get("stockQuantity") || ""), 10);
+  const imagePath = String(formData.get("imagePath") || "").trim();
+
+  if (form.dataset.pendingImageUpload === "true") {
+    throw new Error("Upload the selected image before saving this product.");
+  }
+
+  if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+    throw new Error("Stock quantity must be zero or higher.");
+  }
+
+  if (!imagePath) {
+    throw new Error("Upload an image for this product before saving.");
+  }
+
+  const name = String(formData.get("name") || "").trim();
+  const slug = slugifyValue(String(formData.get("slug") || "").trim() || name);
+
+  return {
+    name,
+    slug,
+    category: String(formData.get("category") || "").trim().toLowerCase(),
+    description: String(formData.get("description") || "").trim(),
+    unitAmount: parsePriceToMinorUnits(formData.get("price")),
+    stockQuantity,
+    imagePath,
+    stripeTaxCode: String(formData.get("stripeTaxCode") || "").trim(),
+    active: formData.get("active") === "on",
+  };
+}
+
+function resetCreateProductForm() {
+  adminProductCreateForm?.reset();
+
+  if (adminProductSlugInput) {
+    adminProductSlugInput.dataset.manual = "false";
+    adminProductSlugInput.value = "";
+  }
+
+  if (adminProductCreateForm) {
+    markPendingImageUpload(adminProductCreateForm, false);
+    setProductImagePreview(adminProductCreateForm, "");
+  }
+}
+
+function syncCreateProductSlug() {
+  if (!adminProductNameInput || !adminProductSlugInput) {
+    return;
+  }
+
+  if (adminProductSlugInput.dataset.manual === "true") {
+    return;
+  }
+
+  adminProductSlugInput.value = slugifyValue(adminProductNameInput.value);
+}
+
+function syncProductFilters() {
+  adminProductState.filters.search = String(adminProductSearchInput?.value || "")
+    .trim()
+    .toLowerCase();
+  adminProductState.filters.category = String(adminProductCategoryFilter?.value || "all");
+  adminProductState.filters.status = String(adminProductStatusFilter?.value || "all");
+  renderProductList();
+}
+
+function updateProductCategoryControls() {
+  const categoryOptions = adminProductMeta.categories
+    .map((category) => `<option value="${category}">${getCategoryLabel(category)}</option>`)
+    .join("");
+
+  const createSelect = adminProductCreateForm?.querySelector('select[name="category"]');
+  if (createSelect) {
+    createSelect.innerHTML = categoryOptions;
+  }
+
+  if (adminProductCategoryFilter) {
+    const currentValue = adminProductCategoryFilter.value || "all";
+    adminProductCategoryFilter.innerHTML = `<option value="all">All categories</option>${categoryOptions}`;
+    adminProductCategoryFilter.value = adminProductMeta.categories.includes(currentValue) ? currentValue : "all";
+  }
+}
+
 async function loadAdminSummary() {
   const data = await fetchAdminJson("/api/admin/summary");
   renderStats(data.stats || {});
@@ -267,6 +846,26 @@ async function loadAdminUsers() {
   renderUsers(data.users || []);
 }
 
+async function loadAdminProducts() {
+  const data = await fetchAdminJson("/api/admin/products");
+
+  if (Array.isArray(data.categories) && data.categories.length > 0) {
+    adminProductMeta.categories = data.categories;
+  }
+
+  if (data.currency) {
+    adminProductMeta.currency = String(data.currency);
+  }
+
+  if (Number.isInteger(data.lowStockThreshold) && data.lowStockThreshold > 0) {
+    adminProductMeta.lowStockThreshold = data.lowStockThreshold;
+  }
+
+  updateProductCategoryControls();
+  adminProductState.products = Array.isArray(data.products) ? data.products : [];
+  renderProductList();
+}
+
 async function loadAdminPage() {
   clearAdminNotice();
 
@@ -276,34 +875,39 @@ async function loadAdminPage() {
 
     if (!user) {
       showAdminNotice("Log in with an admin account to use this page.");
-      if (adminOrders) {
-        adminOrders.innerHTML = "";
-      }
-      if (adminUsers) {
-        adminUsers.innerHTML = "";
-      }
+      clearAdminLists();
       return;
     }
 
     if (!user.isAdmin) {
       showAdminNotice("This account does not have admin access.");
-      if (adminOrders) {
-        adminOrders.innerHTML = "";
-      }
-      if (adminUsers) {
-        adminUsers.innerHTML = "";
-      }
+      clearAdminLists();
       return;
     }
 
-    await Promise.all([loadAdminSummary(), loadAdminOrders(), loadAdminUsers()]);
+    await Promise.all([loadAdminSummary(), loadAdminOrders(), loadAdminUsers(), loadAdminProducts()]);
   } catch (error) {
     showAdminNotice(error.message || "Could not load the admin dashboard.");
   }
 }
 
-if (adminOrders && adminUsers) {
+if (adminOrders && adminUsers && adminProducts) {
   loadAdminPage();
+
+  if (adminProductSlugInput) {
+    adminProductSlugInput.dataset.manual = "false";
+    adminProductSlugInput.addEventListener("input", () => {
+      adminProductSlugInput.dataset.manual = adminProductSlugInput.value.trim().length > 0 ? "true" : "false";
+      if (adminProductSlugInput.dataset.manual === "false") {
+        syncCreateProductSlug();
+      }
+    });
+  }
+
+  adminProductNameInput?.addEventListener("input", syncCreateProductSlug);
+  adminProductSearchInput?.addEventListener("input", syncProductFilters);
+  adminProductCategoryFilter?.addEventListener("change", syncProductFilters);
+  adminProductStatusFilter?.addEventListener("change", syncProductFilters);
 
   refreshOrdersButton?.addEventListener("click", () => {
     loadAdminOrders().catch((error) => showAdminNotice(error.message));
@@ -311,6 +915,65 @@ if (adminOrders && adminUsers) {
 
   refreshUsersButton?.addEventListener("click", () => {
     loadAdminUsers().catch((error) => showAdminNotice(error.message));
+  });
+
+  refreshProductsButton?.addEventListener("click", () => {
+    loadAdminProducts().catch((error) => showAdminNotice(error.message));
+  });
+
+  adminProductCreateForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    try {
+      const payload = buildProductPayload(adminProductCreateForm);
+      const button = adminProductCreateForm.querySelector('button[type="submit"]');
+
+      if (button) {
+        button.disabled = true;
+      }
+
+      await fetchAdminJson("/api/admin/products", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      resetCreateProductForm();
+      showAdminNotice("Product created.", "success");
+      await Promise.all([loadAdminSummary(), loadAdminProducts()]);
+    } catch (error) {
+      showAdminNotice(error.message || "Could not create this product.");
+    } finally {
+      const button = adminProductCreateForm.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  });
+
+  adminProductCreateForm?.addEventListener("change", (event) => {
+    const imageInput = event.target.closest('input[name="imageFile"]');
+
+    if (imageInput) {
+      previewSelectedImageFile(adminProductCreateForm);
+    }
+  });
+
+  adminProductCreateForm?.addEventListener("click", async (event) => {
+    const uploadButton = event.target.closest("[data-upload-image]");
+    const clearButton = event.target.closest("[data-clear-image]");
+
+    if (uploadButton) {
+      try {
+        await uploadSelectedImage(adminProductCreateForm, uploadButton);
+      } catch (error) {
+        showAdminNotice(error.message || "Could not upload this image.");
+      }
+      return;
+    }
+
+    if (clearButton) {
+      clearSelectedImage(adminProductCreateForm);
+    }
   });
 
   adminOrders.addEventListener("submit", async (event) => {
@@ -326,6 +989,7 @@ if (adminOrders && adminUsers) {
       const formData = new FormData(form);
       const orderId = form.dataset.orderId;
       const button = form.querySelector('button[type="submit"]');
+
       if (button) {
         button.disabled = true;
       }
@@ -395,6 +1059,78 @@ if (adminOrders && adminUsers) {
       await Promise.all([window.LobosAuth.refresh(), loadAdminSummary(), loadAdminUsers()]);
     } catch (error) {
       showAdminNotice(error.message || "Could not update this account.");
+    } finally {
+      const button = form.querySelector('button[type="submit"]');
+      if (button && form.isConnected) {
+        button.disabled = false;
+      }
+    }
+  });
+
+  adminProducts.addEventListener("change", (event) => {
+    const imageInput = event.target.closest('input[name="imageFile"]');
+
+    if (!imageInput) {
+      return;
+    }
+
+    const form = imageInput.closest("[data-product-form]");
+    previewSelectedImageFile(form);
+  });
+
+  adminProducts.addEventListener("click", async (event) => {
+    const uploadButton = event.target.closest("[data-upload-image]");
+    const clearButton = event.target.closest("[data-clear-image]");
+
+    if (!uploadButton && !clearButton) {
+      return;
+    }
+
+    const form = event.target.closest("[data-product-form]");
+
+    if (!form) {
+      return;
+    }
+
+    if (uploadButton) {
+      try {
+        await uploadSelectedImage(form, uploadButton);
+      } catch (error) {
+        showAdminNotice(error.message || "Could not upload this image.");
+      }
+      return;
+    }
+
+    clearSelectedImage(form);
+  });
+
+  adminProducts.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-product-form]");
+
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+
+    try {
+      const productId = form.dataset.productId;
+      const payload = buildProductPayload(form);
+      const button = form.querySelector('button[type="submit"]');
+
+      if (button) {
+        button.disabled = true;
+      }
+
+      await fetchAdminJson(`/api/admin/products/${productId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+
+      showAdminNotice("Product updated.", "success");
+      await Promise.all([loadAdminSummary(), loadAdminProducts()]);
+    } catch (error) {
+      showAdminNotice(error.message || "Could not update this product.");
     } finally {
       const button = form.querySelector('button[type="submit"]');
       if (button && form.isConnected) {
