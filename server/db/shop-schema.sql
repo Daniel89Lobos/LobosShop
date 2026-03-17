@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS orders (
   phone TEXT,
   tracking_number TEXT,
   admin_note TEXT,
+  customer_note TEXT,
   shipping_address_json JSONB,
   subtotal_amount INTEGER NOT NULL CHECK (subtotal_amount >= 0),
   shipping_amount INTEGER NOT NULL DEFAULT 0 CHECK (shipping_amount >= 0),

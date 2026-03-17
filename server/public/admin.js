@@ -294,6 +294,10 @@ function renderOrders(orders) {
               Internal note
               <textarea name="adminNote" placeholder="Optional admin-only note">${escapeHtml(order.admin_note || "")}</textarea>
             </label>
+            <label>
+              Note for customer
+              <textarea name="customerNote" placeholder="Optional note visible to the customer">${escapeHtml(order.customer_note || "")}</textarea>
+            </label>
             <div class="admin-inline-actions">
               <button class="btn btn-secondary" type="submit">Update order</button>
               <button class="btn btn-secondary" type="button" data-order-toggle data-order-id="${order.id}">${expandedOrderDetails.has(order.id) ? "Hide details" : "View details"}</button>
@@ -1385,6 +1389,7 @@ function bindOrders() {
           fulfillmentStatus: String(formData.get("fulfillmentStatus") || ""),
           trackingNumber: String(formData.get("trackingNumber") || "").trim(),
           adminNote: String(formData.get("adminNote") || "").trim(),
+          customerNote: String(formData.get("customerNote") || "").trim(),
         }),
       });
 

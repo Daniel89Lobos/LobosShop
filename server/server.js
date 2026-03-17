@@ -285,6 +285,7 @@ app.post(
           phone,
           tracking_number,
           admin_note,
+          customer_note,
           shipping_address_json,
           subtotal_amount,
           shipping_amount,
@@ -292,7 +293,7 @@ app.post(
           total_amount,
           currency
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17
         ) RETURNING id`,
         [
           checkoutSession.id,
@@ -303,6 +304,7 @@ app.post(
           customerDetails.email || checkoutSession.customer_email || null,
           shippingDetails.name || customerDetails.name || null,
           customerDetails.phone || null,
+          null,
           null,
           null,
           shippingAddress,
@@ -483,6 +485,7 @@ function buildOrderResponse(order, items = []) {
     phone: order.phone,
     trackingNumber: order.tracking_number,
     adminNote: order.admin_note,
+    customerNote: order.customer_note,
     shippingAddress: order.shipping_address_json,
     subtotalAmount: Number(order.subtotal_amount),
     shippingAmount: Number(order.shipping_amount),
@@ -1264,6 +1267,7 @@ app.get("/api/admin/orders", requireAdmin, async (req, res) => {
          o.fulfillment_status,
          o.tracking_number,
          o.admin_note,
+         o.customer_note,
          o.total_amount,
          o.created_at,
          o.updated_at,
@@ -1326,6 +1330,7 @@ app.put("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     const fulfillmentStatus = String(req.body.fulfillmentStatus || "").trim().toLowerCase();
     const trackingNumber = String(req.body.trackingNumber || "").trim() || null;
     const adminNote = String(req.body.adminNote || "").trim() || null;
+    const customerNote = String(req.body.customerNote || "").trim() || null;
 
     if (!Number.isInteger(orderId) || orderId <= 0) {
       return res.status(400).json({ error: "Invalid order id" });
@@ -1343,15 +1348,20 @@ app.put("/api/admin/orders/:id", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "Admin note must be 2000 characters or fewer" });
     }
 
+    if (customerNote && customerNote.length > 2000) {
+      return res.status(400).json({ error: "Customer note must be 2000 characters or fewer" });
+    }
+
     const result = await pool.query(
       `UPDATE orders
        SET fulfillment_status = $1,
            tracking_number = $2,
            admin_note = $3,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4
-       RETURNING id, fulfillment_status, tracking_number, admin_note, updated_at`,
-      [fulfillmentStatus, trackingNumber, adminNote, orderId],
+           customer_note = $4,
+            updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5
+       RETURNING id, fulfillment_status, tracking_number, admin_note, customer_note, updated_at`,
+      [fulfillmentStatus, trackingNumber, adminNote, customerNote, orderId],
     );
 
     if (result.rows.length === 0) {

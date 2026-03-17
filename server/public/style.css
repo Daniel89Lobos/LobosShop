@@ -972,6 +972,15 @@ body.modal-open {
   margin-top: 0.35rem;
 }
 
+.account-customer-note {
+  margin: 0.55rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: #fff7e7;
+  border: 1px solid #f0ddb0;
+  color: #6a4b10;
+}
+
 .account-order-meta {
   flex-wrap: wrap;
 }
