@@ -603,13 +603,64 @@ if (filterButtons.length > 0) {
 
 const contactForm = document.getElementById("contactForm");
 const contactNotice = document.getElementById("contactNotice");
+const contactSubmitButton = document.getElementById("contactSubmitButton");
+
+function showContactNotice(message, type = "") {
+  if (!contactNotice) {
+    return;
+  }
+
+  contactNotice.hidden = false;
+  contactNotice.className = `page-status${type === "success" ? " is-success" : type === "error" ? " is-error" : ""}`;
+  contactNotice.textContent = message;
+}
 
 if (contactForm && contactNotice) {
-  contactForm.addEventListener("submit", (event) => {
+  contactForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    contactNotice.textContent =
-      "Thanks! Your message is saved on this page version. We can connect this to email next.";
-    contactForm.reset();
+
+    const formData = new FormData(contactForm);
+    const payload = {
+      name: String(formData.get("name") || "").trim(),
+      email: String(formData.get("email") || "").trim(),
+      message: String(formData.get("message") || "").trim(),
+    };
+
+    if (!payload.name || !payload.email || !payload.message) {
+      showContactNotice("Please fill in your name, email, and message.", "error");
+      return;
+    }
+
+    try {
+      if (contactSubmitButton) {
+        contactSubmitButton.disabled = true;
+        contactSubmitButton.textContent = "Sending...";
+      }
+
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not send your message.");
+      }
+
+      showContactNotice("Thanks! Your message was sent to Lobos Shop.", "success");
+      contactForm.reset();
+    } catch (error) {
+      showContactNotice(error.message || "Could not send your message.", "error");
+    } finally {
+      if (contactSubmitButton) {
+        contactSubmitButton.disabled = false;
+        contactSubmitButton.textContent = "Send message";
+      }
+    }
   });
 }
 

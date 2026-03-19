@@ -37,17 +37,17 @@
         </p>
         <form id="contactForm" class="contact-form">
           <label for="name">Name</label>
-          <input id="name" type="text" required />
+          <input id="name" name="name" type="text" required />
 
           <label for="email">Email</label>
-          <input id="email" type="email" required />
+          <input id="email" name="email" type="email" required />
 
           <label for="message">Message</label>
-          <textarea id="message" required></textarea>
+          <textarea id="message" name="message" required></textarea>
 
-          <button class="btn" type="submit">Send message</button>
+          <button id="contactSubmitButton" class="btn" type="submit">Send message</button>
         </form>
-        <p id="contactNotice" class="notice"></p>
+        <p id="contactNotice" class="page-status" hidden></p>
       </section>
     </main>
 
