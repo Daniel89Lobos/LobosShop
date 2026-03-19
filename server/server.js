@@ -466,6 +466,41 @@ async function loadSessionUser(userId, client = pool) {
   return result.rows[0] || null;
 }
 
+app.post("/api/contact", async (req, res) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "").trim();
+    const message = String(req.body.message || "").trim();
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: "Name, email, and message are required" });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Enter a valid email address" });
+    }
+
+    if (name.length > 120) {
+      return res.status(400).json({ error: "Name must be 120 characters or fewer" });
+    }
+
+    if (message.length > 4000) {
+      return res.status(400).json({ error: "Message must be 4000 characters or fewer" });
+    }
+
+    const emailSent = await sendContactFormEmail({ name, email, message });
+
+    if (!emailSent) {
+      return res.status(503).json({ error: "Contact email is not configured right now" });
+    }
+
+    res.json({ message: "Your message was sent." });
+  } catch (error) {
+    console.error("Contact form error:", error);
+    res.status(500).json({ error: "Could not send your message" });
+  }
+});
+
 async function requireAdmin(req, res, next) {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -598,7 +633,7 @@ function formatShippingAddressLines(shippingAddress) {
     .filter(Boolean);
 }
 
-async function sendEmailMessage({ to, subject, text, html }) {
+async function sendEmailMessage({ to, subject, text, html, replyTo }) {
   if (!emailTransport || !to) {
     return false;
   }
@@ -610,12 +645,42 @@ async function sendEmailMessage({ to, subject, text, html }) {
       subject,
       text,
       html,
+      replyTo,
     });
     return true;
   } catch (error) {
     console.error("Email send error:", error);
     return false;
   }
+}
+
+async function sendContactFormEmail({ name, email, message }) {
+  const contactRecipient = process.env.CONTACT_TO_EMAIL || process.env.SMTP_USER;
+
+  if (!contactRecipient) {
+    return false;
+  }
+
+  const safeName = String(name || "").trim();
+  const safeEmail = String(email || "").trim();
+  const safeMessage = String(message || "").trim();
+
+  return sendEmailMessage({
+    to: contactRecipient,
+    subject: `Lobos Shop contact form from ${safeName}`,
+    replyTo: safeEmail,
+    text:
+      `New message from the Lobos Shop contact form.\n\n` +
+      `Name: ${safeName}\n` +
+      `Email: ${safeEmail}\n\n` +
+      `Message:\n${safeMessage}`,
+    html:
+      `<p><strong>New message from the Lobos Shop contact form.</strong></p>` +
+      `<p><strong>Name:</strong> ${escapeHtml(safeName)}<br />` +
+      `<strong>Email:</strong> ${escapeHtml(safeEmail)}</p>` +
+      `<p><strong>Message:</strong></p>` +
+      `<p>${escapeHtml(safeMessage).replace(/\n/g, "<br />")}</p>`,
+  });
 }
 
 async function sendOrderConfirmationEmail(order) {
