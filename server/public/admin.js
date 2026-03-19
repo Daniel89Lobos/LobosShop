@@ -26,6 +26,11 @@ const adminOrderStatusFilter = document.getElementById("adminOrderStatusFilter")
 const adminOrderResults = document.getElementById("adminOrderResults");
 const adminUserSearchInput = document.getElementById("adminUserSearch");
 const adminUserResults = document.getElementById("adminUserResults");
+const adminFeaturedForm = document.getElementById("adminFeaturedForm");
+const adminFeaturedSlots = document.getElementById("adminFeaturedSlots");
+const adminFeaturedResults = document.getElementById("adminFeaturedResults");
+const refreshFeaturedButton = document.getElementById("refreshFeaturedButton");
+const saveFeaturedButton = document.getElementById("saveFeaturedButton");
 
 const expandedOrderDetails = new Map();
 const expandedProductIds = new Set();
@@ -57,6 +62,12 @@ const adminUserState = {
   users: [],
   search: "",
   expandedUserId: null,
+};
+
+const adminFeaturedState = {
+  featuredProducts: [],
+  slotCount: 5,
+  highlightLabelMaxLength: 30,
 };
 
 function showAdminNotice(message, type = "error") {
@@ -144,7 +155,7 @@ async function uploadProductImage(file) {
 }
 
 function clearProtectedRoots() {
-  [adminOrders, adminUsers, adminProducts].forEach((root) => {
+  [adminOrders, adminUsers, adminProducts, adminFeaturedSlots].forEach((root) => {
     if (root) {
       root.innerHTML = "";
     }
@@ -548,6 +559,182 @@ function getProductCategoryOptions(selectedCategory) {
       (category) => `<option value="${category}"${category === selectedCategory ? " selected" : ""}>${getCategoryLabel(category)}</option>`,
     )
     .join("");
+}
+
+function getFeaturedProductInputName(slot) {
+  return `featuredProduct-${slot}`;
+}
+
+function getFeaturedLabelInputName(slot) {
+  return `featuredLabel-${slot}`;
+}
+
+function getFeaturedSelectableProducts() {
+  return adminProductState.products
+    .filter((product) => product.active)
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base" }));
+}
+
+function getFeaturedEntryBySlot(slot) {
+  return adminFeaturedState.featuredProducts.find((entry) => entry.slot === slot) || null;
+}
+
+function getFeaturedSelectOptions(selectedProductId = null) {
+  const activeProducts = getFeaturedSelectableProducts();
+  const selectedProduct = adminProductState.products.find((product) => product.id === selectedProductId) || null;
+  const options = ['<option value="">No product selected</option>'];
+  const optionProducts = [...activeProducts];
+
+  if (selectedProduct && !optionProducts.some((product) => product.id === selectedProduct.id)) {
+    optionProducts.unshift(selectedProduct);
+  }
+
+  optionProducts.forEach((product) => {
+    const productLabel = `${product.name} (${getCategoryLabel(product.category)})${product.active ? "" : " - archived"}`;
+    options.push(
+      `<option value="${product.id}"${product.id === selectedProductId ? " selected" : ""}>${escapeHtml(productLabel)}</option>`,
+    );
+  });
+
+  return options.join("");
+}
+
+function renderFeaturedManagement() {
+  if (!adminFeaturedSlots) {
+    return;
+  }
+
+  const activeProductCount = getFeaturedSelectableProducts().length;
+  const filledSlotCount = adminFeaturedState.featuredProducts.length;
+
+  if (adminFeaturedResults) {
+    adminFeaturedResults.textContent = `Showing ${filledSlotCount} of ${adminFeaturedState.slotCount} homepage slots. Save changes here to publish them on the homepage.`;
+  }
+
+  if (adminProductState.products.length === 0) {
+    adminFeaturedSlots.innerHTML = `
+      <article class="empty-state">
+        <h3>No products available</h3>
+        <p>Create products first, then come back here to feature them on the homepage.</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (activeProductCount === 0) {
+    adminFeaturedSlots.innerHTML = `
+      <article class="empty-state">
+        <h3>No active products to feature</h3>
+        <p>Activate at least one product before pinning it to the homepage.</p>
+      </article>
+    `;
+    return;
+  }
+
+  adminFeaturedSlots.innerHTML = Array.from({ length: adminFeaturedState.slotCount }, (_, index) => {
+    const slot = index + 1;
+    const entry = getFeaturedEntryBySlot(slot);
+    const product = entry?.product || adminProductState.products.find((item) => item.id === entry?.productId) || null;
+    const stockState = product ? getProductStatus(product) : null;
+    const productHref = product ? `product.html?slug=${encodeURIComponent(product.slug)}` : "";
+    const categoryAndPrice = product
+      ? `${escapeHtml(getCategoryLabel(product.category))} - ${escapeHtml(window.LobosCart.formatMoney(product.unitAmount, product.currency))}`
+      : "Choose a product to pin or leave this slot empty.";
+
+    return `
+      <article class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <p class="eyebrow">Homepage slot ${slot}</p>
+            <h3>${product ? escapeHtml(product.name) : "Empty slot"}</h3>
+            <p class="muted">${categoryAndPrice}</p>
+          </div>
+          <div class="admin-featured-status">
+            ${entry?.highlightLabel ? `<span class="card-tag is-highlight">${escapeHtml(entry.highlightLabel)}</span>` : ""}
+            ${stockState ? `<span class="status-pill ${stockState.className}">${escapeHtml(stockState.label)}</span>` : '<span class="status-pill">Hidden</span>'}
+            ${product && product.active ? `<a class="text-link" href="${productHref}" target="_blank" rel="noreferrer">Open product page</a>` : product ? '<span class="muted">Archived products cannot stay featured.</span>' : ""}
+          </div>
+        </div>
+
+        <div class="admin-featured-layout">
+          <div class="admin-featured-preview">
+            ${product ? `<img src="${escapeHtml(product.imagePath)}" alt="${escapeHtml(product.name)}" />` : '<div class="admin-featured-empty">No product pinned in this slot yet.</div>'}
+            ${stockState ? `<p class="muted admin-card-note">${escapeHtml(stockState.note)}</p>` : '<p class="muted admin-card-note">Empty slots stay hidden on the homepage.</p>'}
+          </div>
+
+          <div class="admin-inline-form">
+            <label>
+              Choose product
+              <select name="${getFeaturedProductInputName(slot)}">
+                ${getFeaturedSelectOptions(entry?.productId || null)}
+              </select>
+            </label>
+
+            <label>
+              Highlight label <span class="muted">(optional)</span>
+              <input
+                name="${getFeaturedLabelInputName(slot)}"
+                type="text"
+                value="${escapeHtml(entry?.highlightLabel || "")}"
+                maxlength="${adminFeaturedState.highlightLabelMaxLength}"
+                placeholder="New, Sale, Bestseller..."
+                list="featuredLabelSuggestions"
+              />
+            </label>
+
+            <p class="muted admin-card-note">Use a short badge if you want to call out something special. For example: New, Sale, Limited, or Seasonal.</p>
+
+            <div class="admin-inline-actions">
+              <button class="btn btn-secondary" type="button" data-clear-featured-slot="${slot}">Clear slot</button>
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function buildFeaturedProductsPayloadFromForm() {
+  if (!adminFeaturedForm) {
+    return [];
+  }
+
+  const formData = new FormData(adminFeaturedForm);
+  const featuredProducts = [];
+  const usedProductIds = new Set();
+
+  for (let slot = 1; slot <= adminFeaturedState.slotCount; slot += 1) {
+    const productIdRaw = String(formData.get(getFeaturedProductInputName(slot)) || "").trim();
+    const highlightLabel = String(formData.get(getFeaturedLabelInputName(slot)) || "").trim();
+
+    if (!productIdRaw) {
+      continue;
+    }
+
+    const productId = Number.parseInt(productIdRaw, 10);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      throw new Error(`Choose a valid product for homepage slot ${slot}.`);
+    }
+
+    if (usedProductIds.has(productId)) {
+      throw new Error("Choose each featured product only once.");
+    }
+
+    if (highlightLabel.length > adminFeaturedState.highlightLabelMaxLength) {
+      throw new Error(`Highlight labels must be ${adminFeaturedState.highlightLabelMaxLength} characters or fewer.`);
+    }
+
+    usedProductIds.add(productId);
+    featuredProducts.push({
+      slot,
+      productId,
+      highlightLabel,
+    });
+  }
+
+  return featuredProducts;
 }
 
 function formatPriceInputValue(unitAmount) {
@@ -1163,6 +1350,23 @@ async function loadAdminProducts() {
   renderProductList();
 }
 
+async function loadAdminFeaturedProducts() {
+  await loadAdminProducts();
+
+  const data = await fetchAdminJson("/api/admin/featured-products");
+
+  if (Number.isInteger(data.slotCount) && data.slotCount > 0) {
+    adminFeaturedState.slotCount = data.slotCount;
+  }
+
+  if (Number.isInteger(data.highlightLabelMaxLength) && data.highlightLabelMaxLength > 0) {
+    adminFeaturedState.highlightLabelMaxLength = data.highlightLabelMaxLength;
+  }
+
+  adminFeaturedState.featuredProducts = Array.isArray(data.featuredProducts) ? data.featuredProducts : [];
+  renderFeaturedManagement();
+}
+
 function bindCreateProductForm() {
   if (!adminProductCreateForm) {
     return;
@@ -1546,6 +1750,77 @@ function bindUsers() {
   });
 }
 
+function bindFeaturedProducts() {
+  if (!adminFeaturedForm || !adminFeaturedSlots) {
+    return;
+  }
+
+  refreshFeaturedButton?.addEventListener("click", () => {
+    loadAdminFeaturedProducts().catch((error) => showAdminNotice(error.message));
+  });
+
+  adminFeaturedSlots.addEventListener("click", (event) => {
+    const clearButton = event.target.closest("[data-clear-featured-slot]");
+
+    if (!clearButton) {
+      return;
+    }
+
+    const slot = Number.parseInt(clearButton.dataset.clearFeaturedSlot, 10);
+
+    if (!Number.isInteger(slot) || slot <= 0) {
+      return;
+    }
+
+    const productField = adminFeaturedForm.querySelector(`[name="${getFeaturedProductInputName(slot)}"]`);
+    const labelField = adminFeaturedForm.querySelector(`[name="${getFeaturedLabelInputName(slot)}"]`);
+
+    if (productField) {
+      productField.value = "";
+    }
+
+    if (labelField) {
+      labelField.value = "";
+    }
+  });
+
+  adminFeaturedForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    try {
+      const featuredProducts = buildFeaturedProductsPayloadFromForm();
+
+      if (saveFeaturedButton) {
+        saveFeaturedButton.disabled = true;
+      }
+
+      const data = await fetchAdminJson("/api/admin/featured-products", {
+        method: "PUT",
+        body: JSON.stringify({ featuredProducts }),
+      });
+
+      adminFeaturedState.featuredProducts = Array.isArray(data.featuredProducts) ? data.featuredProducts : [];
+
+      if (Number.isInteger(data.slotCount) && data.slotCount > 0) {
+        adminFeaturedState.slotCount = data.slotCount;
+      }
+
+      if (Number.isInteger(data.highlightLabelMaxLength) && data.highlightLabelMaxLength > 0) {
+        adminFeaturedState.highlightLabelMaxLength = data.highlightLabelMaxLength;
+      }
+
+      renderFeaturedManagement();
+      showAdminNotice("Homepage featured products updated.", "success");
+    } catch (error) {
+      showAdminNotice(error.message || "Could not update featured products.");
+    } finally {
+      if (saveFeaturedButton) {
+        saveFeaturedButton.disabled = false;
+      }
+    }
+  });
+}
+
 async function ensureAdminAccess() {
   clearAdminNotice();
 
@@ -1589,6 +1864,11 @@ async function loadCurrentAdminView() {
     return;
   }
 
+  if (adminView === "featured") {
+    await loadAdminFeaturedProducts();
+    return;
+  }
+
   if (adminView === "orders") {
     await loadAdminOrders();
     return;
@@ -1604,6 +1884,7 @@ async function initAdminPage() {
   bindProductManagement();
   bindOrders();
   bindUsers();
+  bindFeaturedProducts();
 
   const hasAccess = await ensureAdminAccess();
 
