@@ -1,5 +1,13 @@
 const CART_STORAGE_KEY = "lobos-cart";
 const FALLBACK_PRODUCTS_PATH = "products.json";
+const FEATURED_PRODUCT_SLUGS = [
+  "the-lantern-trail-club",
+  "family-hobby-year-planner",
+  "adult-creative-reset-calendar",
+  "forest-friend-fox",
+  "pocket-ocean-octopus",
+];
+const INTERACTIVE_ELEMENT_SELECTOR = "a, button, input, select, textarea, label";
 
 let cartItemsCache = [];
 let cartScope = {
@@ -10,6 +18,25 @@ let cartScope = {
 let cartLoadPromise = null;
 let authStateCache = null;
 let authStatePromise = null;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function truncateText(value, maxLength = 110) {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, maxLength).trimEnd()}...`;
+}
 
 function sanitizeCart(items) {
   if (!Array.isArray(items)) {
@@ -502,6 +529,32 @@ window.LobosStore = {
     };
   },
 
+  async fetchFeaturedProducts() {
+    try {
+      const apiResponse = await fetch("/api/featured-products");
+
+      if (apiResponse.ok) {
+        const apiData = await apiResponse.json();
+        const featuredProducts = Array.isArray(apiData.featuredProducts) ? apiData.featuredProducts : [];
+
+        if (featuredProducts.length > 0) {
+          return {
+            products: featuredProducts,
+            source: "api",
+          };
+        }
+      }
+    } catch (error) {
+    }
+
+    const catalogData = await window.LobosStore.fetchCatalog();
+
+    return {
+      products: getFeaturedProducts(catalogData.products || []),
+      source: catalogData.source,
+    };
+  },
+
   async fetchProduct(slug) {
     if (!slug) {
       throw new Error("Missing product slug.");
@@ -598,6 +651,203 @@ if (filterButtons.length > 0) {
     button.addEventListener("click", () => {
       applyShopFilter(button.dataset.filter);
     });
+  });
+}
+
+const featuredProductsGrid = document.getElementById("featuredProducts");
+const featuredProductsNotice = document.getElementById("featuredProductsNotice");
+
+function showFeaturedProductsNotice(message, type = "error") {
+  if (!featuredProductsNotice) {
+    return;
+  }
+
+  featuredProductsNotice.hidden = false;
+  featuredProductsNotice.className = `page-status${type === "success" ? " is-success" : type === "error" ? " is-error" : ""}`;
+  featuredProductsNotice.textContent = message;
+}
+
+function clearFeaturedProductsNotice() {
+  if (!featuredProductsNotice) {
+    return;
+  }
+
+  featuredProductsNotice.hidden = true;
+  featuredProductsNotice.className = "page-status";
+  featuredProductsNotice.textContent = "";
+}
+
+function getHomepageCategoryLabel(category) {
+  if (category === "books") {
+    return "Book";
+  }
+
+  if (category === "calendars") {
+    return "Calendar";
+  }
+
+  if (category === "amigurumi") {
+    return "Amigurumi";
+  }
+
+  return "Product";
+}
+
+function getProductDetailHref(product) {
+  return `product.html?slug=${encodeURIComponent(product.slug)}`;
+}
+
+function getStoreStockLabel(product) {
+  if (product.stockStatus === "out_of_stock") {
+    return {
+      className: "status-pill out-of-stock",
+      text: "Out of stock",
+      note: "This product cannot be added until stock is updated.",
+    };
+  }
+
+  if (product.stockStatus === "low_stock") {
+    return {
+      className: "status-pill low-stock",
+      text: `Only ${product.stockQuantity} left`,
+      note: "Low stock. Stripe will verify availability again at checkout.",
+    };
+  }
+
+  return {
+    className: "status-pill in-stock",
+    text: "In stock",
+    note: `Ready to ship from Sweden. ${product.stockQuantity} available right now.`,
+  };
+}
+
+function getFeaturedProducts(products) {
+  const productMap = new Map(
+    (Array.isArray(products) ? products : [])
+      .filter((product) => product && product.slug)
+      .map((product) => [product.slug, product]),
+  );
+  const selectedProducts = FEATURED_PRODUCT_SLUGS.map((slug) => productMap.get(slug)).filter(Boolean);
+
+  if (selectedProducts.length >= FEATURED_PRODUCT_SLUGS.length) {
+    return selectedProducts;
+  }
+
+  const usedSlugs = new Set(selectedProducts.map((product) => product.slug));
+  const fallbackProducts = (Array.isArray(products) ? products : []).filter(
+    (product) => product?.slug && !usedSlugs.has(product.slug),
+  );
+
+  return [...selectedProducts, ...fallbackProducts].slice(0, FEATURED_PRODUCT_SLUGS.length);
+}
+
+function renderFeaturedProducts(products) {
+  if (!featuredProductsGrid) {
+    return;
+  }
+
+  if (!Array.isArray(products) || products.length === 0) {
+    featuredProductsGrid.innerHTML = `
+      <article class="card empty-state">
+        <h3>No featured products available</h3>
+        <p>Add products to the catalog to highlight them on the homepage.</p>
+      </article>
+    `;
+    return;
+  }
+
+  featuredProductsGrid.innerHTML = products
+    .map((product) => {
+      const detailHref = getProductDetailHref(product);
+      const categoryLabel = getHomepageCategoryLabel(product.category);
+      const priceLabel = product.price || window.LobosCart.formatMoney(product.unitAmount, product.currency || "SEK");
+      const description = truncateText(product.description, 120);
+      const stock = getStoreStockLabel(product);
+      const highlightLabel = String(product.highlightLabel || "").trim();
+
+      return `
+        <article class="featured-card card product-card card-stack" tabindex="0" role="link" data-featured-product-link="${detailHref}" aria-label="View details for ${escapeHtml(product.name)}">
+          <img class="product-image" src="${escapeHtml(product.imagePath)}" alt="${escapeHtml(product.name)}" />
+          <div class="featured-card-badges">
+            ${highlightLabel ? `<div class="card-tag is-highlight">${escapeHtml(highlightLabel)}</div>` : ""}
+            <div class="card-tag">${escapeHtml(categoryLabel)}</div>
+          </div>
+          <h3>${escapeHtml(product.name)}</h3>
+          <p>${escapeHtml(description)}</p>
+          <p class="price">${escapeHtml(priceLabel)}</p>
+          <div class="card-footer">
+            <span class="${stock.className}">${escapeHtml(stock.text)}</span>
+            <button class="btn" type="button" data-featured-add-to-cart="${product.id}" ${product.stockStatus === "out_of_stock" ? "disabled" : ""}>
+              ${product.stockStatus === "out_of_stock" ? "Unavailable" : "Add to cart"}
+            </button>
+          </div>
+          <p class="inventory-copy">${escapeHtml(stock.note)}</p>
+          <a class="text-link featured-card-cta" href="${detailHref}">View details</a>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function loadFeaturedProducts() {
+  if (!featuredProductsGrid) {
+    return;
+  }
+
+  try {
+    const data = await window.LobosStore.fetchFeaturedProducts();
+    renderFeaturedProducts(data.products || []);
+    clearFeaturedProductsNotice();
+  } catch (error) {
+    featuredProductsGrid.innerHTML = `
+      <article class="card empty-state">
+        <h3>Featured products unavailable</h3>
+        <p>We could not load the product catalog right now.</p>
+      </article>
+    `;
+    showFeaturedProductsNotice("Featured products could not be loaded right now.");
+  }
+}
+
+if (featuredProductsGrid) {
+  loadFeaturedProducts();
+
+  featuredProductsGrid.addEventListener("click", async (event) => {
+    const addButton = event.target.closest("[data-featured-add-to-cart]");
+
+    if (addButton) {
+      try {
+        const productId = Number.parseInt(addButton.dataset.featuredAddToCart, 10);
+        await window.LobosCart.addItem(productId, 1);
+        showFeaturedProductsNotice("Added to cart. You can keep browsing or review your cart now.", "success");
+      } catch (error) {
+        showFeaturedProductsNotice(error.message || "Could not add this product to your cart.");
+      }
+      return;
+    }
+
+    if (event.target.closest(INTERACTIVE_ELEMENT_SELECTOR)) {
+      return;
+    }
+
+    const card = event.target.closest("[data-featured-product-link]");
+
+    if (!card) {
+      return;
+    }
+
+    window.location.href = card.dataset.featuredProductLink;
+  });
+
+  featuredProductsGrid.addEventListener("keydown", (event) => {
+    const card = event.target.closest("[data-featured-product-link]");
+
+    if (!card || event.target !== card || !["Enter", " "].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    window.location.href = card.dataset.featuredProductLink;
   });
 }
 

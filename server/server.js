@@ -22,6 +22,8 @@ const CART_METADATA_KEY = "cart_items";
 const SHIPPING_METADATA_KEY = "shipping_amount";
 const ORDER_USER_METADATA_KEY = "user_id";
 const LOW_STOCK_THRESHOLD = 5;
+const FEATURED_PRODUCT_SLOT_COUNT = 5;
+const FEATURED_LABEL_MAX_LENGTH = 30;
 const PRODUCT_CATEGORIES = ["books", "calendars", "amigurumi"];
 const PRODUCT_CATEGORY_SET = new Set(PRODUCT_CATEGORIES);
 const PRODUCT_UPLOAD_DIR = path.join(PUBLIC_DIR, "assets", "uploads");
@@ -161,9 +163,26 @@ const emailTransport = process.env.SMTP_HOST && process.env.SMTP_FROM
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASSWORD,
           }
-        : undefined,
+          : undefined,
     })
   : null;
+
+async function ensureShopSupportTables() {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS featured_products (
+       id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+       slot_index INTEGER NOT NULL UNIQUE CHECK (slot_index >= 1 AND slot_index <= ${FEATURED_PRODUCT_SLOT_COUNT}),
+       product_id INTEGER NOT NULL UNIQUE REFERENCES products(id) ON DELETE CASCADE,
+       highlight_label TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+     )`,
+  );
+
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_featured_products_product_id ON featured_products (product_id)",
+  );
+}
 
 // Stripe webhook must receive the raw body before JSON parsing.
 app.post(
@@ -927,6 +946,85 @@ function serializeProduct(product) {
   };
 }
 
+function normalizeFeaturedProductsPayload(payload) {
+  const featuredProducts = Array.isArray(payload.featuredProducts) ? payload.featuredProducts : [];
+
+  if (featuredProducts.length > FEATURED_PRODUCT_SLOT_COUNT) {
+    const error = new Error(`Choose up to ${FEATURED_PRODUCT_SLOT_COUNT} featured products`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const usedSlots = new Set();
+  const usedProductIds = new Set();
+
+  return featuredProducts
+    .map((entry) => {
+      const slot = Number.parseInt(String(entry.slot || ""), 10);
+      const productId = Number.parseInt(String(entry.productId || ""), 10);
+      const highlightLabel = String(entry.highlightLabel || "").trim() || null;
+
+      if (!Number.isInteger(slot) || slot < 1 || slot > FEATURED_PRODUCT_SLOT_COUNT) {
+        const error = new Error("Choose a valid featured product slot");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (!Number.isInteger(productId) || productId <= 0) {
+        const error = new Error("Choose a valid product for each featured slot");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (usedSlots.has(slot)) {
+        const error = new Error("Each homepage slot can only be used once");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (usedProductIds.has(productId)) {
+        const error = new Error("The same product cannot be featured more than once");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (highlightLabel && highlightLabel.length > FEATURED_LABEL_MAX_LENGTH) {
+        const error = new Error(`Highlight labels must be ${FEATURED_LABEL_MAX_LENGTH} characters or fewer`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      usedSlots.add(slot);
+      usedProductIds.add(productId);
+
+      return {
+        slot,
+        productId,
+        highlightLabel,
+      };
+    })
+    .sort((left, right) => left.slot - right.slot);
+}
+
+async function loadFeaturedProductRows(options = {}) {
+  const { includeInactive = false } = options;
+  const activeClause = includeInactive ? "" : "AND p.active = true";
+  const result = await pool.query(
+    `SELECT
+       fp.slot_index,
+       fp.product_id,
+       fp.highlight_label,
+       p.*
+     FROM featured_products fp
+     JOIN products p ON p.id = fp.product_id
+     WHERE 1 = 1
+       ${activeClause}
+     ORDER BY fp.slot_index ASC`,
+  );
+
+  return result.rows;
+}
+
 function parseCartMetadata(rawValue) {
   if (!rawValue) {
     return [];
@@ -1167,6 +1265,23 @@ app.get("/api/products", async (req, res) => {
         country: SHOP_COUNTRY,
         label: SHIPPING_LABEL,
       },
+    });
+  } catch (error) {
+    handleShopError(error, res);
+  }
+});
+
+app.get("/api/featured-products", async (req, res) => {
+  try {
+    const rows = await loadFeaturedProductRows();
+
+    res.json({
+      slotCount: FEATURED_PRODUCT_SLOT_COUNT,
+      featuredProducts: rows.map((row) => ({
+        ...serializeProduct(row),
+        slot: Number(row.slot_index),
+        highlightLabel: row.highlight_label || null,
+      })),
     });
   } catch (error) {
     handleShopError(error, res);
@@ -1502,6 +1617,91 @@ app.get("/api/admin/summary", requireAdmin, async (req, res) => {
   } catch (error) {
     console.error("Admin summary error:", error);
     res.status(500).json({ error: "Could not load admin summary" });
+  }
+});
+
+app.get("/api/admin/featured-products", requireAdmin, async (req, res) => {
+  try {
+    const rows = await loadFeaturedProductRows({ includeInactive: true });
+
+    res.json({
+      slotCount: FEATURED_PRODUCT_SLOT_COUNT,
+      highlightLabelMaxLength: FEATURED_LABEL_MAX_LENGTH,
+      featuredProducts: rows.map((row) => ({
+        slot: Number(row.slot_index),
+        productId: Number(row.product_id),
+        highlightLabel: row.highlight_label || null,
+        product: serializeAdminProduct(row),
+      })),
+    });
+  } catch (error) {
+    console.error("Admin featured products error:", error);
+    res.status(500).json({ error: "Could not load featured products" });
+  }
+});
+
+app.put("/api/admin/featured-products", requireAdmin, async (req, res) => {
+  try {
+    const featuredProducts = normalizeFeaturedProductsPayload(req.body || {});
+    const productIds = [...new Set(featuredProducts.map((entry) => entry.productId))];
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      if (productIds.length > 0) {
+        const productResult = await client.query(
+          `SELECT id, name, active
+           FROM products
+           WHERE id = ANY($1::int[])
+           FOR UPDATE`,
+          [productIds],
+        );
+
+        if (productResult.rows.length !== productIds.length) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "One or more selected featured products no longer exist" });
+        }
+
+        const inactiveProduct = productResult.rows.find((product) => !product.active);
+
+        if (inactiveProduct) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: `${inactiveProduct.name} must be active before it can be featured` });
+        }
+      }
+
+      await client.query("DELETE FROM featured_products");
+
+      for (const entry of featuredProducts) {
+        await client.query(
+          `INSERT INTO featured_products (slot_index, product_id, highlight_label)
+           VALUES ($1, $2, $3)`,
+          [entry.slot, entry.productId, entry.highlightLabel],
+        );
+      }
+
+      await client.query("COMMIT");
+
+      const rows = await loadFeaturedProductRows({ includeInactive: true });
+      return res.json({
+        slotCount: FEATURED_PRODUCT_SLOT_COUNT,
+        highlightLabelMaxLength: FEATURED_LABEL_MAX_LENGTH,
+        featuredProducts: rows.map((row) => ({
+          slot: Number(row.slot_index),
+          productId: Number(row.product_id),
+          highlightLabel: row.highlight_label || null,
+          product: serializeAdminProduct(row),
+        })),
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    handleShopError(error, res);
   }
 });
 
@@ -2201,8 +2401,19 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Storefront: ${FRONTEND_URL}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
-});
+async function startServer() {
+  try {
+    await ensureShopSupportTables();
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Storefront: ${FRONTEND_URL}`);
+      console.log(`Health check: http://localhost:${PORT}/api/health`);
+    });
+  } catch (error) {
+    console.error("Could not start server:", error);
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -218,6 +218,40 @@ h1 {
   display: block;
 }
 
+.featured-card {
+  display: grid;
+  gap: 0.7rem;
+  height: 100%;
+  cursor: pointer;
+  color: inherit;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.featured-card:hover,
+.featured-card:focus-visible {
+  transform: translateY(-3px);
+  border-color: #a9b7c5;
+  box-shadow: 0 0 0 4px rgba(75, 85, 99, 0.12), var(--shadow);
+}
+
+.featured-card:hover .featured-card-cta,
+.featured-card:focus-visible .featured-card-cta {
+  color: var(--accent-dark);
+  text-decoration: underline;
+}
+
+.featured-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.card-tag.is-highlight {
+  background: #fff1db;
+  border-color: #f3c98f;
+  color: #9a5711;
+}
+
 .product-title-link,
 .cart-product-link {
   color: inherit;
@@ -772,6 +806,62 @@ body.modal-open {
   margin: 0;
 }
 
+.admin-featured-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-featured-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-featured-summary p {
+  margin: 0;
+}
+
+.admin-featured-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.admin-featured-preview {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.admin-featured-preview img {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.admin-featured-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  border: 1px dashed #b7c3cf;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfcfd 0%, #eef2f6 100%);
+  color: var(--muted);
+}
+
+.admin-featured-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
 .admin-pagination {
   display: flex;
   align-items: center;
@@ -1240,7 +1330,8 @@ textarea {
 
   .admin-product-toolbar,
   .admin-toolbar,
-  .admin-image-field {
+  .admin-image-field,
+  .admin-featured-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1310,6 +1401,12 @@ textarea {
      grid-template-columns: 1fr;
      flex-direction: column;
      }
+
+   .admin-featured-summary,
+   .admin-featured-status {
+     flex-direction: column;
+     align-items: flex-start;
+   }
 
    .admin-pagination {
      flex-direction: column;

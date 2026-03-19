@@ -71,61 +71,11 @@
 
       <section class="featured">
         <h2>Featured Products</h2>
-        <div class="cards">
-          <article class="card product-card card-stack">
-            <a class="product-image-link" href="product.html?slug=the-lantern-trail-club">
-              <img class="product-image" src="assets/images/book-lantern.svg" alt="Cover for The Lantern Trail Club" />
-            </a>
-            <div class="card-tag">Book</div>
-            <h3><a class="product-title-link" href="product.html?slug=the-lantern-trail-club">The Lantern Trail Club</a></h3>
-            <p>Adventure chapter book for ages 9-12 with mystery maps and friendship challenges.</p>
-            <a class="text-link" href="product.html?slug=the-lantern-trail-club">View details</a>
-            <p class="price">160 kr</p>
-            <p class="small-note">Dummy text: paperback, 180 pages, release month placeholder.</p>
-          </article>
-          <article class="card product-card card-stack">
-            <a class="product-image-link" href="product.html?slug=family-hobby-year-planner">
-              <img class="product-image" src="assets/images/calendar-family.svg" alt="Image for Family Hobby Year Planner" />
-            </a>
-            <div class="card-tag">Calendar</div>
-            <h3><a class="product-title-link" href="product.html?slug=family-hobby-year-planner">Family Hobby Year Planner</a></h3>
-            <p>12 months of weekend and evening hobby ideas with easy prompts.</p>
-            <a class="text-link" href="product.html?slug=family-hobby-year-planner">View details</a>
-            <p class="price">220 kr</p>
-            <p class="small-note">Dummy text: printed wall format, monthly themes placeholder.</p>
-          </article>
-          <article class="card product-card card-stack">
-            <a class="product-image-link" href="product.html?slug=adult-creative-reset-calendar">
-              <img class="product-image" src="assets/images/calendar-adult.svg" alt="Image for Adult Creative Reset Calendar" />
-            </a>
-            <div class="card-tag">Calendar</div>
-            <h3><a class="product-title-link" href="product.html?slug=adult-creative-reset-calendar">Adult Creative Reset Calendar</a></h3>
-            <p>Daily prompts focused on low-stress creative habits and consistency.</p>
-            <a class="text-link" href="product.html?slug=adult-creative-reset-calendar">View details</a>
-            <p class="price">200 kr</p>
-            <p class="small-note">Dummy text: 365 prompts, desk format placeholder.</p>
-          </article>
-          <article class="card product-card card-stack">
-            <a class="product-image-link" href="product.html?slug=forest-friend-fox">
-              <img class="product-image" src="assets/images/amigurumi-fox.svg" alt="Image for Forest Friend Fox amigurumi" />
-            </a>
-            <div class="card-tag">Amigurumi</div>
-            <h3><a class="product-title-link" href="product.html?slug=forest-friend-fox">Forest Friend Fox</a></h3>
-            <p>Handmade crochet fox with soft texture and a storybook-inspired color palette.</p>
-            <a class="text-link" href="product.html?slug=forest-friend-fox">View details</a>
-            <p class="price">190 kr</p>
-            <p class="small-note">Dummy text: about 20 cm tall, safety eyes, gift-ready placeholder.</p>
-          </article>
-          <article class="card product-card card-stack">
-            <a class="product-image-link" href="product.html?slug=pocket-ocean-octopus">
-              <img class="product-image" src="assets/images/amigurumi-octopus.svg" alt="Image for Pocket Ocean Octopus amigurumi" />
-            </a>
-            <div class="card-tag">Amigurumi</div>
-            <h3><a class="product-title-link" href="product.html?slug=pocket-ocean-octopus">Pocket Ocean Octopus</a></h3>
-            <p>Small crochet octopus designed as a cheerful desk buddy or thoughtful handmade gift.</p>
-            <a class="text-link" href="product.html?slug=pocket-ocean-octopus">View details</a>
-            <p class="price">170 kr</p>
-            <p class="small-note">Dummy text: palm-sized plush, pastel yarn, limited batch placeholder.</p>
+        <p id="featuredProductsNotice" class="page-status" hidden></p>
+        <div id="featuredProducts" class="cards" aria-live="polite">
+          <article class="card empty-state">
+            <h3>Loading featured products...</h3>
+            <p>Pulling the latest items from the shop catalog.</p>
           </article>
         </div>
       </section>
