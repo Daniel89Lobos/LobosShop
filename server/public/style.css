@@ -1307,6 +1307,41 @@ textarea {
   color: var(--muted);
 }
 
+.site-footer p {
+  margin: 0.35rem 0;
+}
+
+.policy-links,
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1rem;
+}
+
+.policy-links {
+  margin-top: 1rem;
+}
+
+.footer-links {
+  justify-content: center;
+  margin: 0.9rem auto 0;
+  max-width: 48rem;
+}
+
+.policy-links a,
+.footer-links a {
+  color: var(--accent-dark);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.policy-links a:hover,
+.policy-links a:focus-visible,
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  text-decoration: underline;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -1376,9 +1411,14 @@ textarea {
     flex-direction: column;
   }
 
-   .checkout-gate-actions {
+  .policy-links {
     flex-direction: column;
-   }
+    align-items: flex-start;
+  }
+
+   .checkout-gate-actions {
+     flex-direction: column;
+    }
 
    .account-actions {
     flex-direction: column;
