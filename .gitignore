@@ -154,3 +154,4 @@ out/
 # Local development files
 local.js
 local.json
+DAILY_WORKFLOW.local.md
