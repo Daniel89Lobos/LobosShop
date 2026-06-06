@@ -1,9 +1,7 @@
 const CART_STORAGE_KEY = "lobos-cart";
 const FALLBACK_PRODUCTS_PATH = "products.json";
 const FEATURED_PRODUCT_SLUGS = [
-  "the-lantern-trail-club",
-  "family-hobby-year-planner",
-  "adult-creative-reset-calendar",
+  "dog",
   "forest-friend-fox",
   "pocket-ocean-octopus",
 ];
@@ -535,7 +533,9 @@ window.LobosStore = {
 
       if (apiResponse.ok) {
         const apiData = await apiResponse.json();
-        const featuredProducts = Array.isArray(apiData.featuredProducts) ? apiData.featuredProducts : [];
+        const featuredProducts = Array.isArray(apiData.featuredProducts)
+          ? apiData.featuredProducts.filter((product) => product?.category === "amigurumi")
+          : [];
 
         if (featuredProducts.length > 0) {
           return {
@@ -722,8 +722,11 @@ function getStoreStockLabel(product) {
 }
 
 function getFeaturedProducts(products) {
+  const amigurumiProducts = (Array.isArray(products) ? products : []).filter(
+    (product) => product?.category === "amigurumi",
+  );
   const productMap = new Map(
-    (Array.isArray(products) ? products : [])
+    amigurumiProducts
       .filter((product) => product && product.slug)
       .map((product) => [product.slug, product]),
   );
@@ -734,7 +737,7 @@ function getFeaturedProducts(products) {
   }
 
   const usedSlugs = new Set(selectedProducts.map((product) => product.slug));
-  const fallbackProducts = (Array.isArray(products) ? products : []).filter(
+  const fallbackProducts = amigurumiProducts.filter(
     (product) => product?.slug && !usedSlugs.has(product.slug),
   );
 
