@@ -601,13 +601,13 @@ const filterButtons = document.querySelectorAll(".filter-btn");
 
 function getInitialShopCategory() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("category") || "all";
+  return params.get("category") || filterButtons[0]?.dataset.filter || "all";
 }
 
 function getValidShopCategory(category) {
   return Array.from(filterButtons).some((button) => button.dataset.filter === category)
     ? category
-    : "all";
+    : filterButtons[0]?.dataset.filter || "all";
 }
 
 function updateShopCategoryUrl(category) {
