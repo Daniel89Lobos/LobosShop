@@ -176,11 +176,6 @@ const emailTransport = process.env.SMTP_HOST && process.env.SMTP_FROM
     })
   : null;
 
-async function ensureShopSchema() {
-  const schemaSql = await fs.promises.readFile(path.join(__dirname, "db", "shop-schema.sql"), "utf8");
-  await pool.query(schemaSql);
-}
-
 async function ensureProductImagesTable() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS product_images (
@@ -2678,7 +2673,6 @@ app.use("*", (req, res) => {
 
 async function startServer() {
   try {
-    await ensureShopSchema();
     await ensureShopSupportTables();
 
     app.listen(PORT, () => {
