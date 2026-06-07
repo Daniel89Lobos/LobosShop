@@ -293,6 +293,13 @@ h1 {
   background: var(--surface);
 }
 
+.product-detail-image-count {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
 .product-detail-copy {
   display: grid;
   gap: 0.8rem;

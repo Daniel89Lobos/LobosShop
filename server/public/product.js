@@ -117,7 +117,8 @@ function renderProduct() {
         <img class="product-detail-image" src="${escapeHtml(activeImagePath)}" alt="${productName}" />
         ${
           imagePaths.length > 1
-            ? `<div class="product-image-thumbs is-detail" aria-label="Product images for ${productName}">
+            ? `<p class="product-detail-image-count">Photo ${activeImageIndex + 1} of ${imagePaths.length}</p>
+              <div class="product-image-thumbs is-detail" aria-label="Product images for ${productName}">
                 ${imagePaths
                   .map(
                     (imagePath, index) => `

@@ -1427,6 +1427,12 @@ function resetCreateProductForm() {
   }
 
   adminProductCreateForm.reset();
+  const stockQuantityInput = adminProductCreateForm.querySelector('input[name="stockQuantity"]');
+
+  if (stockQuantityInput) {
+    stockQuantityInput.value = "1";
+  }
+
   markPendingImageUpload(adminProductCreateForm, false);
   setProductImagePreview(adminProductCreateForm, "");
 
