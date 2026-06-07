@@ -1182,8 +1182,8 @@ function clearSelectedImage(form) {
   setProductImagePreview(form, []);
 }
 
-function handleImageDropZoneEvent(event, form) {
-  const dropZone = event.target.closest("[data-image-dropzone]");
+async function handleImageDropZoneEvent(event, form) {
+  const dropZone = event.target?.closest?.("[data-image-dropzone]");
 
   if (!dropZone || !form?.contains(dropZone)) {
     return false;
@@ -1191,11 +1191,13 @@ function handleImageDropZoneEvent(event, form) {
 
   if (event.type === "dragenter" || event.type === "dragover") {
     event.preventDefault();
+    event.stopPropagation();
     dropZone.classList.add("is-dragover");
     return true;
   }
 
   if (event.type === "dragleave") {
+    event.stopPropagation();
     if (!dropZone.contains(event.relatedTarget)) {
       dropZone.classList.remove("is-dragover");
     }
@@ -1204,6 +1206,7 @@ function handleImageDropZoneEvent(event, form) {
 
   if (event.type === "drop") {
     event.preventDefault();
+    event.stopPropagation();
     dropZone.classList.remove("is-dragover");
 
     const files = Array.from(event.dataTransfer?.files || []).filter((file) =>
@@ -1215,7 +1218,16 @@ function handleImageDropZoneEvent(event, form) {
       return true;
     }
 
-    setSelectedImageFiles(form, files);
+    const uploadButton = form.querySelector("[data-upload-image]");
+    updateImageFileCountLabel(form, files.length);
+
+    try {
+      await uploadSelectedImage(form, uploadButton, files);
+    } catch (error) {
+      showAdminNotice(error.message || "Could not upload these images.");
+      updateImageFileCountLabel(form, 0);
+    }
+
     return true;
   }
 
@@ -1257,13 +1269,16 @@ function removeGalleryImage(form, index) {
   setProductImagePreview(form, imagePaths);
 }
 
-async function uploadSelectedImage(form, triggerButton) {
+async function uploadSelectedImage(form, triggerButton, selectedFiles = null) {
   const imageFileInput = getImageFileInput(form);
-  const files = getSelectedImageFiles(form);
+  const files = Array.isArray(selectedFiles) ? selectedFiles : getSelectedImageFiles(form);
 
   if (files.length === 0) {
     throw new Error("Choose at least one image before uploading.");
   }
+
+  markPendingImageUpload(form, true);
+  updateImageFileCountLabel(form, files.length);
 
   if (triggerButton) {
     triggerButton.disabled = true;
