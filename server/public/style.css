@@ -356,6 +356,66 @@ h1 {
   display: block;
 }
 
+.product-image-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: -0.25rem 0 0.5rem;
+}
+
+.product-image-thumbs.is-detail {
+  margin: 0.85rem 0 0;
+}
+
+.product-image-thumb {
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.product-image-thumb.is-active {
+  border-color: var(--accent-dark);
+}
+
+.product-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.page-btn {
+  min-width: 2.35rem;
+  min-height: 2.35rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent-dark);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.page-btn.active,
+.page-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .card-tag {
   display: inline-block;
   background: var(--surface-soft);
@@ -912,6 +972,48 @@ body.modal-open {
   color: var(--muted);
   text-align: center;
   padding: 1rem;
+}
+
+.admin-image-gallery {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-image-gallery.is-empty {
+  min-height: 180px;
+  place-items: center;
+  color: var(--muted);
+  text-align: center;
+  padding: 1rem;
+  border: 1px dashed #b7c3cf;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfcfd 0%, #eef2f6 100%);
+}
+
+.admin-gallery-item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.admin-gallery-item img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.admin-gallery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 .admin-image-controls {

@@ -5,6 +5,7 @@ const FEATURED_PRODUCT_SLUGS = [
   "forest-friend-fox",
   "pocket-ocean-octopus",
 ];
+const HOME_PRODUCTS_PAGE_SIZE = 10;
 const INTERACTIVE_ELEMENT_SELECTOR = "a, button, input, select, textarea, label";
 
 let cartItemsCache = [];
@@ -656,6 +657,9 @@ if (filterButtons.length > 0) {
 
 const featuredProductsGrid = document.getElementById("featuredProducts");
 const featuredProductsNotice = document.getElementById("featuredProductsNotice");
+const featuredProductsPagination = document.getElementById("featuredProductsPagination");
+const featuredProductsResults = document.getElementById("featuredProductsResults");
+let homepageProducts = [];
 
 function showFeaturedProductsNotice(message, type = "error") {
   if (!featuredProductsNotice) {
@@ -744,22 +748,126 @@ function getFeaturedProducts(products) {
   return [...selectedProducts, ...fallbackProducts].slice(0, FEATURED_PRODUCT_SLUGS.length);
 }
 
+function getProductImagePaths(product) {
+  const imagePaths = Array.isArray(product?.imagePaths)
+    ? product.imagePaths.map((imagePath) => String(imagePath || "").trim()).filter(Boolean)
+    : [];
+  const primaryImagePath = String(product?.imagePath || "").trim();
+
+  if (primaryImagePath && !imagePaths.includes(primaryImagePath)) {
+    imagePaths.unshift(primaryImagePath);
+  }
+
+  return imagePaths;
+}
+
+function renderProductImageThumbs(product, imagePaths, imageId) {
+  if (imagePaths.length <= 1) {
+    return "";
+  }
+
+  return `
+    <div class="product-image-thumbs" aria-label="Product images for ${escapeHtml(product.name)}">
+      ${imagePaths
+        .map(
+          (imagePath, index) => `
+            <button
+              class="product-image-thumb${index === 0 ? " is-active" : ""}"
+              type="button"
+              data-product-image-src="${escapeHtml(imagePath)}"
+              data-product-image-target="${escapeHtml(imageId)}"
+              aria-label="Show image ${index + 1} for ${escapeHtml(product.name)}"
+              aria-pressed="${index === 0 ? "true" : "false"}"
+            >
+              <img src="${escapeHtml(imagePath)}" alt="" />
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function getHomepagePageFromUrl(totalPages) {
+  const params = new URLSearchParams(window.location.search);
+  const requestedPage = Number.parseInt(String(params.get("page") || "1"), 10);
+
+  if (!Number.isInteger(requestedPage) || requestedPage < 1 || requestedPage > totalPages) {
+    return 1;
+  }
+
+  return requestedPage;
+}
+
+function updateHomepagePageUrl(page) {
+  const url = new URL(window.location.href);
+
+  if (page <= 1) {
+    url.searchParams.delete("page");
+  } else {
+    url.searchParams.set("page", String(page));
+  }
+
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function renderHomepagePagination(totalProducts, currentPage, totalPages) {
+  if (!featuredProductsPagination) {
+    return;
+  }
+
+  if (featuredProductsResults) {
+    if (totalProducts === 0) {
+      featuredProductsResults.textContent = "No amigurumi available right now.";
+    } else {
+      const start = (currentPage - 1) * HOME_PRODUCTS_PAGE_SIZE + 1;
+      const end = Math.min(totalProducts, currentPage * HOME_PRODUCTS_PAGE_SIZE);
+      featuredProductsResults.textContent = `Showing ${start}-${end} of ${totalProducts} amigurumi.`;
+    }
+  }
+
+  if (totalPages <= 1) {
+    featuredProductsPagination.hidden = true;
+    featuredProductsPagination.innerHTML = "";
+    return;
+  }
+
+  featuredProductsPagination.hidden = false;
+  featuredProductsPagination.innerHTML = Array.from({ length: totalPages }, (_, index) => {
+    const page = index + 1;
+    return `
+      <button class="page-btn${page === currentPage ? " active" : ""}" type="button" data-home-page="${page}" aria-current="${page === currentPage ? "page" : "false"}">
+        ${page}
+      </button>
+    `;
+  }).join("");
+}
+
 function renderFeaturedProducts(products) {
   if (!featuredProductsGrid) {
     return;
   }
 
   if (!Array.isArray(products) || products.length === 0) {
+    renderHomepagePagination(0, 1, 1);
     featuredProductsGrid.innerHTML = `
       <article class="card empty-state">
-        <h3>No featured products available</h3>
-        <p>Add products to the catalog to highlight them on the homepage.</p>
+        <h3>No amigurumi available</h3>
+        <p>Add products to the catalog to show them here.</p>
       </article>
     `;
     return;
   }
 
-  featuredProductsGrid.innerHTML = products
+  const totalPages = Math.max(1, Math.ceil(products.length / HOME_PRODUCTS_PAGE_SIZE));
+  const currentPage = getHomepagePageFromUrl(totalPages);
+  const pageStart = (currentPage - 1) * HOME_PRODUCTS_PAGE_SIZE;
+  const visibleProducts = products.slice(pageStart, pageStart + HOME_PRODUCTS_PAGE_SIZE);
+
+  updateHomepagePageUrl(currentPage);
+  renderHomepagePagination(products.length, currentPage, totalPages);
+
+  featuredProductsGrid.innerHTML = visibleProducts
     .map((product) => {
       const detailHref = getProductDetailHref(product);
       const categoryLabel = getHomepageCategoryLabel(product.category);
@@ -767,10 +875,14 @@ function renderFeaturedProducts(products) {
       const description = truncateText(product.description, 120);
       const stock = getStoreStockLabel(product);
       const highlightLabel = String(product.highlightLabel || "").trim();
+      const imagePaths = getProductImagePaths(product);
+      const imagePath = imagePaths[0] || product.imagePath;
+      const imageId = `home-product-image-${product.id}`;
 
       return `
         <article class="featured-card card product-card card-stack" tabindex="0" role="link" data-featured-product-link="${detailHref}" aria-label="View details for ${escapeHtml(product.name)}">
-          <img class="product-image" src="${escapeHtml(product.imagePath)}" alt="${escapeHtml(product.name)}" />
+          <img id="${escapeHtml(imageId)}" class="product-image" src="${escapeHtml(imagePath)}" alt="${escapeHtml(product.name)}" />
+          ${renderProductImageThumbs(product, imagePaths, imageId)}
           <div class="featured-card-badges">
             ${highlightLabel ? `<div class="card-tag is-highlight">${escapeHtml(highlightLabel)}</div>` : ""}
             <div class="card-tag">${escapeHtml(categoryLabel)}</div>
@@ -798,17 +910,18 @@ async function loadFeaturedProducts() {
   }
 
   try {
-    const data = await window.LobosStore.fetchFeaturedProducts();
-    renderFeaturedProducts(data.products || []);
+    const data = await window.LobosStore.fetchCatalog();
+    homepageProducts = (data.products || []).filter((product) => product?.category === "amigurumi");
+    renderFeaturedProducts(homepageProducts);
     clearFeaturedProductsNotice();
   } catch (error) {
     featuredProductsGrid.innerHTML = `
       <article class="card empty-state">
-        <h3>Featured products unavailable</h3>
+        <h3>Amigurumi unavailable</h3>
         <p>We could not load the product catalog right now.</p>
       </article>
     `;
-    showFeaturedProductsNotice("Featured products could not be loaded right now.");
+    showFeaturedProductsNotice("Available amigurumi could not be loaded right now.");
   }
 }
 
@@ -816,6 +929,26 @@ if (featuredProductsGrid) {
   loadFeaturedProducts();
 
   featuredProductsGrid.addEventListener("click", async (event) => {
+    const imageButton = event.target.closest("[data-product-image-src]");
+
+    if (imageButton) {
+      const image = document.getElementById(imageButton.dataset.productImageTarget);
+
+      if (image) {
+        image.src = imageButton.dataset.productImageSrc;
+      }
+
+      imageButton
+        .closest(".product-image-thumbs")
+        ?.querySelectorAll("[data-product-image-src]")
+        .forEach((button) => {
+          const isActive = button === imageButton;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      return;
+    }
+
     const addButton = event.target.closest("[data-featured-add-to-cart]");
 
     if (addButton) {
@@ -851,6 +984,26 @@ if (featuredProductsGrid) {
 
     event.preventDefault();
     window.location.href = card.dataset.featuredProductLink;
+  });
+}
+
+if (featuredProductsPagination) {
+  featuredProductsPagination.addEventListener("click", (event) => {
+    const pageButton = event.target.closest("[data-home-page]");
+
+    if (!pageButton) {
+      return;
+    }
+
+    const page = Number.parseInt(pageButton.dataset.homePage, 10);
+
+    if (!Number.isInteger(page) || page <= 0) {
+      return;
+    }
+
+    updateHomepagePageUrl(page);
+    renderFeaturedProducts(homepageProducts);
+    featuredProductsGrid?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 

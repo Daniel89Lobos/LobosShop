@@ -26,6 +26,8 @@ const FEATURED_PRODUCT_SLOT_COUNT = 5;
 const FEATURED_LABEL_MAX_LENGTH = 30;
 const PRODUCT_CATEGORIES = ["books", "calendars", "amigurumi"];
 const PRODUCT_CATEGORY_SET = new Set(PRODUCT_CATEGORIES);
+const STOREFRONT_PRODUCT_CATEGORY = "amigurumi";
+const STOREFRONT_PRODUCT_CATEGORIES = [STOREFRONT_PRODUCT_CATEGORY];
 const PRODUCT_UPLOAD_DIR = path.join(PUBLIC_DIR, "assets", "uploads");
 const PRODUCT_UPLOAD_WEB_PATH = "assets/uploads";
 const PRODUCT_IMAGE_UPLOAD_LIMIT = 5 * 1024 * 1024;
@@ -80,7 +82,14 @@ async function maybeDeleteManagedUploadImage(client, imagePath, ignoredProductId
   }
 
   const params = [imagePath];
-  let duplicateQuery = "SELECT COUNT(*)::int AS count FROM products WHERE image_path = $1";
+  let duplicateQuery = `
+    SELECT COUNT(*)::int AS count
+    FROM (
+      SELECT id FROM products WHERE image_path = $1
+      UNION ALL
+      SELECT product_id AS id FROM product_images WHERE image_path = $1
+    ) image_refs
+    WHERE 1 = 1`;
 
   if (Number.isInteger(ignoredProductId) && ignoredProductId > 0) {
     params.push(ignoredProductId);
@@ -168,6 +177,36 @@ const emailTransport = process.env.SMTP_HOST && process.env.SMTP_FROM
   : null;
 
 async function ensureShopSupportTables() {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS product_images (
+       id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+       image_path TEXT NOT NULL,
+       sort_order INTEGER NOT NULL DEFAULT 1 CHECK (sort_order >= 1),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       UNIQUE (product_id, image_path),
+       UNIQUE (product_id, sort_order)
+     )`,
+  );
+
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_product_images_product_id_sort_order ON product_images (product_id, sort_order)",
+  );
+
+  await pool.query(
+    `INSERT INTO product_images (product_id, image_path, sort_order)
+     SELECT id, image_path, 1
+     FROM products p
+     WHERE image_path IS NOT NULL
+       AND image_path <> ''
+       AND NOT EXISTS (
+         SELECT 1
+         FROM product_images pi
+         WHERE pi.product_id = p.id
+       )
+     ON CONFLICT DO NOTHING`,
+  );
+
   await pool.query(
     `CREATE TABLE IF NOT EXISTS featured_products (
        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -849,6 +888,24 @@ function parseBooleanInput(value) {
   return Boolean(value);
 }
 
+function normalizeProductImagePaths(payload) {
+  const rawImages = Array.isArray(payload.imagePaths)
+    ? payload.imagePaths
+    : Array.isArray(payload.images)
+      ? payload.images
+      : [];
+  const imagePaths = rawImages
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const fallbackImagePath = String(payload.imagePath || "").trim();
+
+  if (fallbackImagePath) {
+    imagePaths.unshift(fallbackImagePath);
+  }
+
+  return [...new Set(imagePaths)];
+}
+
 function normalizeAdminProductPayload(payload) {
   const name = String(payload.name || "").trim();
   const rawSlug = String(payload.slug || "").trim();
@@ -857,7 +914,8 @@ function normalizeAdminProductPayload(payload) {
   const category = String(payload.category || "").trim().toLowerCase();
   const unitAmount = Number.parseInt(String(payload.unitAmount || ""), 10);
   const stockQuantity = Number.parseInt(String(payload.stockQuantity || ""), 10);
-  const imagePath = String(payload.imagePath || "").trim();
+  const imagePaths = normalizeProductImagePaths(payload);
+  const imagePath = imagePaths[0] || "";
   const stripeTaxCode = String(payload.stripeTaxCode || "").trim() || null;
   const active = parseBooleanInput(payload.active);
   const currency = String(payload.currency || SHOP_CURRENCY)
@@ -921,6 +979,7 @@ function normalizeAdminProductPayload(payload) {
     currency,
     stockQuantity,
     imagePath,
+    imagePaths,
     active,
     stripeTaxCode,
   };
@@ -939,6 +998,8 @@ function getStockStatus(stockQuantity) {
 }
 
 function serializeProduct(product) {
+  const imagePaths = getProductImagePaths(product);
+
   return {
     id: Number(product.id),
     slug: product.slug,
@@ -950,10 +1011,97 @@ function serializeProduct(product) {
     price: formatCurrency(Number(product.unit_amount), product.currency),
     stockQuantity: Number(product.stock_quantity),
     stockStatus: getStockStatus(Number(product.stock_quantity)),
-    imagePath: product.image_path,
+    imagePath: imagePaths[0] || product.image_path,
+    imagePaths,
     active: Boolean(product.active),
     stripeTaxCode: product.stripe_tax_code,
   };
+}
+
+function getProductImagePaths(product) {
+  const imagePaths = parseProductImagePaths(product.image_paths);
+  const primaryImagePath = String(product.image_path || "").trim();
+
+  if (primaryImagePath && !imagePaths.includes(primaryImagePath)) {
+    imagePaths.unshift(primaryImagePath);
+  }
+
+  return imagePaths;
+}
+
+function parseProductImagePaths(value) {
+  if (Array.isArray(value)) {
+    return value.map((imagePath) => String(imagePath || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((imagePath) => String(imagePath || "").trim()).filter(Boolean);
+      }
+    } catch (error) {
+    }
+  }
+
+  return [];
+}
+
+async function updateProductImages(client, productId, imagePaths) {
+  const nextImagePaths = [...new Set((imagePaths || []).map((value) => String(value || "").trim()).filter(Boolean))];
+
+  if (nextImagePaths.length === 0) {
+    const error = new Error("Upload at least one image for this product");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existingResult = await client.query(
+    "SELECT image_path FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC, id ASC",
+    [productId],
+  );
+  const previousImagePaths = existingResult.rows.map((row) => row.image_path);
+
+  await client.query("UPDATE products SET image_path = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", [
+    nextImagePaths[0],
+    productId,
+  ]);
+  await client.query("DELETE FROM product_images WHERE product_id = $1", [productId]);
+
+  for (const [index, imagePath] of nextImagePaths.entries()) {
+    await client.query(
+      `INSERT INTO product_images (product_id, image_path, sort_order)
+       VALUES ($1, $2, $3)`,
+      [productId, imagePath, index + 1],
+    );
+  }
+
+  for (const previousImagePath of previousImagePaths) {
+    if (!nextImagePaths.includes(previousImagePath)) {
+      await maybeDeleteManagedUploadImage(client, previousImagePath, productId);
+    }
+  }
+}
+
+async function loadProductWithImagesById(client, productId) {
+  const result = await client.query(
+    `SELECT
+       p.*,
+       COALESCE(
+         (
+           SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+           FROM product_images pi
+           WHERE pi.product_id = p.id
+         ),
+         '[]'::json
+       ) AS image_paths
+     FROM products p
+     WHERE p.id = $1
+     LIMIT 1`,
+    [productId],
+  );
+
+  return result.rows[0] || null;
 }
 
 function normalizeFeaturedProductsPayload(payload) {
@@ -1024,12 +1172,21 @@ async function loadFeaturedProductRows(options = {}) {
        fp.slot_index,
        fp.product_id,
        fp.highlight_label,
-       p.*
+       p.*,
+       COALESCE(
+         (
+           SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+           FROM product_images pi
+           WHERE pi.product_id = p.id
+         ),
+         '[]'::json
+       ) AS image_paths
      FROM featured_products fp
      JOIN products p ON p.id = fp.product_id
-     WHERE 1 = 1
+     WHERE p.category = $1
        ${activeClause}
      ORDER BY fp.slot_index ASC`,
+    [STOREFRONT_PRODUCT_CATEGORY],
   );
 
   return result.rows;
@@ -1138,8 +1295,8 @@ function buildLineItems(validatedItems, shippingAmount) {
 
 async function loadProductsByIds(productIds, client = pool) {
   return client.query(
-    "SELECT * FROM products WHERE id = ANY($1::int[]) AND active = true",
-    [productIds],
+    "SELECT * FROM products WHERE id = ANY($1::int[]) AND active = true AND category = $2",
+    [productIds, STOREFRONT_PRODUCT_CATEGORY],
   );
 }
 
@@ -1261,10 +1418,21 @@ app.get("/api/health", (req, res) => {
 app.get("/api/products", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT *
-       FROM products
-       WHERE active = true
-       ORDER BY category ASC, name ASC`,
+      `SELECT
+         p.*,
+         COALESCE(
+           (
+             SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+             FROM product_images pi
+             WHERE pi.product_id = p.id
+           ),
+           '[]'::json
+         ) AS image_paths
+       FROM products p
+       WHERE p.active = true
+         AND p.category = $1
+       ORDER BY p.category ASC, p.name ASC`,
+      [STOREFRONT_PRODUCT_CATEGORY],
     );
 
     res.json({
@@ -1301,8 +1469,22 @@ app.get("/api/featured-products", async (req, res) => {
 app.get("/api/products/:slug", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM products WHERE slug = $1 AND active = true LIMIT 1",
-      [req.params.slug],
+      `SELECT
+         p.*,
+         COALESCE(
+           (
+             SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+             FROM product_images pi
+             WHERE pi.product_id = p.id
+           ),
+           '[]'::json
+         ) AS image_paths
+       FROM products p
+       WHERE p.slug = $1
+         AND p.active = true
+         AND p.category = $2
+       LIMIT 1`,
+      [req.params.slug, STOREFRONT_PRODUCT_CATEGORY],
     );
 
     if (result.rows.length === 0) {
@@ -1661,7 +1843,7 @@ app.put("/api/admin/featured-products", requireAdmin, async (req, res) => {
 
       if (productIds.length > 0) {
         const productResult = await client.query(
-          `SELECT id, name, active
+          `SELECT id, name, category, active
            FROM products
            WHERE id = ANY($1::int[])
            FOR UPDATE`,
@@ -1678,6 +1860,15 @@ app.put("/api/admin/featured-products", requireAdmin, async (req, res) => {
         if (inactiveProduct) {
           await client.query("ROLLBACK");
           return res.status(400).json({ error: `${inactiveProduct.name} must be active before it can be featured` });
+        }
+
+        const nonStorefrontProduct = productResult.rows.find(
+          (product) => product.category !== STOREFRONT_PRODUCT_CATEGORY,
+        );
+
+        if (nonStorefrontProduct) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: `${nonStorefrontProduct.name} is not an amigurumi product` });
         }
       }
 
@@ -2002,7 +2193,7 @@ app.get("/api/admin/products", requireAdmin, async (req, res) => {
     const whereClauses = [];
 
     if (!includeInactive) {
-      whereClauses.push("active = true");
+      whereClauses.push("p.active = true");
     }
 
     if (category !== "all") {
@@ -2011,22 +2202,31 @@ app.get("/api/admin/products", requireAdmin, async (req, res) => {
       }
 
       params.push(category);
-      whereClauses.push(`category = $${params.length}`);
+      whereClauses.push(`p.category = $${params.length}`);
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
     const result = await pool.query(
-      `SELECT *
-       FROM products
+      `SELECT
+         p.*,
+         COALESCE(
+           (
+             SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+             FROM product_images pi
+             WHERE pi.product_id = p.id
+           ),
+           '[]'::json
+         ) AS image_paths
+       FROM products p
        ${whereClause}
-       ORDER BY active DESC, updated_at DESC, id DESC
+       ORDER BY p.active DESC, p.updated_at DESC, p.id DESC
        LIMIT 300`,
       params,
     );
 
     res.json({
       products: result.rows.map(serializeAdminProduct),
-      categories: PRODUCT_CATEGORIES,
+      categories: STOREFRONT_PRODUCT_CATEGORIES,
       currency: SHOP_CURRENCY.toUpperCase(),
       lowStockThreshold: LOW_STOCK_THRESHOLD,
     });
@@ -2039,46 +2239,68 @@ app.get("/api/admin/products", requireAdmin, async (req, res) => {
 app.post("/api/admin/products", requireAdmin, async (req, res) => {
   try {
     const productInput = normalizeAdminProductPayload(req.body || {});
-    const duplicateProduct = await pool.query(
-      "SELECT id FROM products WHERE slug = $1 LIMIT 1",
-      [productInput.slug],
-    );
 
-    if (duplicateProduct.rows.length > 0) {
-      return res.status(400).json({ error: "A product with this slug already exists" });
+    if (productInput.category !== STOREFRONT_PRODUCT_CATEGORY) {
+      return res.status(400).json({ error: "Only amigurumi products can be created right now" });
     }
 
-    const result = await pool.query(
-      `INSERT INTO products (
-         slug,
-         name,
-         description,
-         category,
-         unit_amount,
-         currency,
-         stock_quantity,
-         image_path,
-         active,
-         stripe_tax_code
-       ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-       )
-       RETURNING *`,
-      [
-        productInput.slug,
-        productInput.name,
-        productInput.description,
-        productInput.category,
-        productInput.unitAmount,
-        productInput.currency,
-        productInput.stockQuantity,
-        productInput.imagePath,
-        productInput.active,
-        productInput.stripeTaxCode,
-      ],
-    );
+    const client = await pool.connect();
 
-    res.status(201).json({ product: serializeAdminProduct(result.rows[0]) });
+    try {
+      await client.query("BEGIN");
+
+      const duplicateProduct = await client.query(
+        "SELECT id FROM products WHERE slug = $1 LIMIT 1",
+        [productInput.slug],
+      );
+
+      if (duplicateProduct.rows.length > 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "A product with this slug already exists" });
+      }
+
+      const result = await client.query(
+        `INSERT INTO products (
+           slug,
+           name,
+           description,
+           category,
+           unit_amount,
+           currency,
+           stock_quantity,
+           image_path,
+           active,
+           stripe_tax_code
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+         )
+         RETURNING *`,
+        [
+          productInput.slug,
+          productInput.name,
+          productInput.description,
+          productInput.category,
+          productInput.unitAmount,
+          productInput.currency,
+          productInput.stockQuantity,
+          productInput.imagePath,
+          productInput.active,
+          productInput.stripeTaxCode,
+        ],
+      );
+
+      const productId = Number(result.rows[0].id);
+      await updateProductImages(client, productId, productInput.imagePaths);
+      const product = await loadProductWithImagesById(client, productId);
+
+      await client.query("COMMIT");
+      res.status(201).json({ product: serializeAdminProduct(product) });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     handleShopError(error, res);
   }
@@ -2093,6 +2315,11 @@ app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
     }
 
     const productInput = normalizeAdminProductPayload(req.body || {});
+
+    if (productInput.category !== STOREFRONT_PRODUCT_CATEGORY && productInput.active) {
+      return res.status(400).json({ error: "Only amigurumi products can be shown in the storefront right now" });
+    }
+
     const client = await pool.connect();
 
     try {
@@ -2132,7 +2359,7 @@ app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
              stripe_tax_code = $10,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $11
-         RETURNING *`,
+         RETURNING id`,
         [
           productInput.slug,
           productInput.name,
@@ -2148,8 +2375,11 @@ app.put("/api/admin/products/:id", requireAdmin, async (req, res) => {
         ],
       );
 
+      await updateProductImages(client, Number(result.rows[0].id), productInput.imagePaths);
+      const product = await loadProductWithImagesById(client, Number(result.rows[0].id));
+
       await client.query("COMMIT");
-      res.json({ product: serializeAdminProduct(result.rows[0]) });
+      res.json({ product: serializeAdminProduct(product) });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -2175,7 +2405,21 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
       await client.query("BEGIN");
 
       const existingProduct = await client.query(
-        "SELECT id, name, image_path FROM products WHERE id = $1 FOR UPDATE",
+        `SELECT
+           p.id,
+           p.name,
+           p.image_path,
+           COALESCE(
+             (
+               SELECT json_agg(pi.image_path ORDER BY pi.sort_order ASC, pi.id ASC)
+               FROM product_images pi
+               WHERE pi.product_id = p.id
+             ),
+             '[]'::json
+           ) AS image_paths
+         FROM products p
+         WHERE p.id = $1
+         FOR UPDATE`,
         [productId],
       );
 
@@ -2185,9 +2429,13 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
       }
 
       const product = existingProduct.rows[0];
+      const imagePaths = getProductImagePaths(product);
 
       await client.query("DELETE FROM products WHERE id = $1", [productId]);
-      await maybeDeleteManagedUploadImage(client, product.image_path, productId);
+
+      for (const imagePath of imagePaths) {
+        await maybeDeleteManagedUploadImage(client, imagePath, productId);
+      }
 
       await client.query("COMMIT");
       res.json({

@@ -346,8 +346,8 @@ function renderCart() {
     cartItemsRoot.innerHTML = `
       <article class="empty-state">
         <h3>Your cart is empty</h3>
-        <p>Add books, calendars, or amigurumi from the shop to start checkout.</p>
-        <a class="btn" href="shop.html">Go to shop</a>
+        <p>Add handmade amigurumi from the shop to start checkout.</p>
+        <a class="btn" href="index.html">Go to shop</a>
       </article>
     `;
     checkoutButton.disabled = true;

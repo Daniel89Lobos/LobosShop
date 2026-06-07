@@ -11,6 +11,10 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
+    <meta http-equiv="refresh" content="0; url=index.html" />
+    <script>
+      window.location.replace(`index.html${window.location.search}${window.location.hash}`);
+    </script>
   </head>
   <body>
     <header class="site-header">
@@ -32,7 +36,7 @@
       <section class="shop-top content-panel">
         <div>
           <h1>Shop</h1>
-          <p>Story-rich books, practical creative tools, and handmade amigurumi, now with a real cart and Stripe Checkout flow.</p>
+          <p>Handmade amigurumi, now with a real cart and Stripe Checkout flow.</p>
         </div>
         <a class="btn" href="cart.html">Review cart</a>
       </section>

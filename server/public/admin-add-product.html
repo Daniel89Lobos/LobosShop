@@ -18,7 +18,6 @@
       <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
       <nav id="siteNav" class="site-nav">
         <a href="index.html">Home</a>
-        <a href="shop.html">Shop</a>
         <a href="about.html">About</a>
         <a href="faq.html">FAQ</a>
         <a href="contact.html">Contact</a>
@@ -35,7 +34,6 @@
           <a class="admin-page-link" href="admin.html">Overview</a>
           <a class="admin-page-link is-active" href="admin-add-product.html">Add product</a>
           <a class="admin-page-link" href="admin-products.html">Product management</a>
-          <a class="admin-page-link" href="admin-featured.html">Featured products</a>
           <a class="admin-page-link" href="admin-orders.html">Pending orders</a>
           <a class="admin-page-link" href="admin-accounts.html">Accounts</a>
         </div>
@@ -63,8 +61,6 @@
             <label>
               Category
               <select name="category" required>
-                <option value="books">Books</option>
-                <option value="calendars">Calendars</option>
                 <option value="amigurumi">Amigurumi</option>
               </select>
             </label>
@@ -92,21 +88,21 @@
           </label>
 
           <section class="admin-image-field">
-            <input name="imagePath" type="hidden" />
+            <input name="imagePaths" type="hidden" value="[]" />
             <div class="admin-image-preview-wrap">
-              <div class="admin-image-preview is-empty" data-image-preview>
+              <div class="admin-image-gallery is-empty" data-image-gallery>
                 <span>No image uploaded</span>
               </div>
-              <p class="muted" data-image-path-label>No image selected yet.</p>
+              <p class="muted" data-image-path-label>No images selected yet.</p>
             </div>
             <div class="admin-image-controls">
               <label>
-                Product image
-                <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                Product images
+                <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
               </label>
               <div class="admin-inline-actions">
-                <button class="btn btn-secondary" type="button" data-upload-image>Save image</button>
-                <button class="btn btn-secondary" type="button" data-clear-image>Clear image</button>
+                <button class="btn btn-secondary" type="button" data-upload-image>Add selected images</button>
+                <button class="btn btn-secondary" type="button" data-clear-image>Clear gallery</button>
               </div>
             </div>
           </section>

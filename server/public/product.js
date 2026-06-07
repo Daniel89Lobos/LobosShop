@@ -3,6 +3,7 @@ const productNotice = document.getElementById("productNotice");
 
 let currentProduct = null;
 let selectedQuantity = 1;
+let selectedImageIndex = 0;
 
 function showProductNotice(message, type = "error") {
   if (!productNotice) {
@@ -44,6 +45,19 @@ function getCategoryLabel(category) {
   return "Product";
 }
 
+function getProductImagePaths(product) {
+  const imagePaths = Array.isArray(product?.imagePaths)
+    ? product.imagePaths.map((imagePath) => String(imagePath || "").trim()).filter(Boolean)
+    : [];
+  const primaryImagePath = String(product?.imagePath || "").trim();
+
+  if (primaryImagePath && !imagePaths.includes(primaryImagePath)) {
+    imagePaths.unshift(primaryImagePath);
+  }
+
+  return imagePaths;
+}
+
 function getStockLabel(product) {
   if (product.stockStatus === "out_of_stock") {
     return {
@@ -77,7 +91,7 @@ function renderMissingProduct(message) {
     <article class="empty-state">
       <h1>Product not found</h1>
       <p>${message}</p>
-      <a class="btn" href="shop.html">Back to shop</a>
+      <a class="btn" href="index.html">Back to shop</a>
     </article>
   `;
 }
@@ -89,23 +103,50 @@ function renderProduct() {
 
   const stock = getStockLabel(currentProduct);
   const quantity = Math.min(Math.max(selectedQuantity, 1), Math.max(currentProduct.stockQuantity, 1));
+  const imagePaths = getProductImagePaths(currentProduct);
+  const activeImageIndex = Math.min(Math.max(selectedImageIndex, 0), Math.max(imagePaths.length - 1, 0));
+  const activeImagePath = imagePaths[activeImageIndex] || currentProduct.imagePath;
+  const productName = escapeHtml(currentProduct.name);
 
   selectedQuantity = quantity;
+  selectedImageIndex = activeImageIndex;
 
   productContent.innerHTML = `
     <article class="product-detail-panel">
       <div class="product-detail-media">
-        <img class="product-detail-image" src="${currentProduct.imagePath}" alt="${currentProduct.name}" />
+        <img class="product-detail-image" src="${escapeHtml(activeImagePath)}" alt="${productName}" />
+        ${
+          imagePaths.length > 1
+            ? `<div class="product-image-thumbs is-detail" aria-label="Product images for ${productName}">
+                ${imagePaths
+                  .map(
+                    (imagePath, index) => `
+                      <button
+                        class="product-image-thumb${index === activeImageIndex ? " is-active" : ""}"
+                        type="button"
+                        data-product-action="image"
+                        data-image-index="${index}"
+                        aria-label="Show image ${index + 1} for ${productName}"
+                        aria-pressed="${index === activeImageIndex ? "true" : "false"}"
+                      >
+                        <img src="${escapeHtml(imagePath)}" alt="" />
+                      </button>
+                    `,
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
       </div>
       <div class="product-detail-copy">
-        <a class="text-link product-back-link" href="shop.html?category=${encodeURIComponent(currentProduct.category)}">Back to ${getCategoryLabel(currentProduct.category)} section</a>
-        <div class="card-tag">${getCategoryLabel(currentProduct.category)}</div>
-        <h1>${currentProduct.name}</h1>
-        <p class="product-detail-price">${currentProduct.price}</p>
-        <p class="product-detail-description">${currentProduct.description}</p>
+        <a class="text-link product-back-link" href="index.html">Back to available amigurumi</a>
+        <div class="card-tag">${escapeHtml(getCategoryLabel(currentProduct.category))}</div>
+        <h1>${productName}</h1>
+        <p class="product-detail-price">${escapeHtml(currentProduct.price)}</p>
+        <p class="product-detail-description">${escapeHtml(currentProduct.description)}</p>
         <div class="product-detail-status">
-          <span class="${stock.className}">${stock.text}</span>
-          <p class="product-helper">${stock.note}</p>
+          <span class="${stock.className}">${escapeHtml(stock.text)}</span>
+          <p class="product-helper">${escapeHtml(stock.note)}</p>
         </div>
         <div class="product-actions">
           <div class="product-qty-picker" aria-label="Quantity selector">
@@ -141,6 +182,7 @@ async function loadProduct() {
 
     currentProduct = data.product;
     selectedQuantity = 1;
+    selectedImageIndex = 0;
     document.title = `${currentProduct.name} | Lobos Shop`;
     renderProduct();
 
@@ -178,6 +220,16 @@ if (productContent) {
     if (action === "increment") {
       selectedQuantity = Math.min(selectedQuantity + 1, currentProduct.stockQuantity);
       renderProduct();
+      return;
+    }
+
+    if (action === "image") {
+      const imageIndex = Number.parseInt(actionButton.dataset.imageIndex, 10);
+
+      if (Number.isInteger(imageIndex) && imageIndex >= 0) {
+        selectedImageIndex = imageIndex;
+        renderProduct();
+      }
       return;
     }
 

@@ -11,54 +11,6 @@ INSERT INTO products (
   stripe_tax_code
 ) VALUES
   (
-    'the-lantern-trail-club',
-    'The Lantern Trail Club',
-    'Adventure mystery chapter book for readers aged 9-12.',
-    'books',
-    16000,
-    'sek',
-    24,
-    'assets/images/book-lantern.svg',
-    true,
-    NULL
-  ),
-  (
-    'mapmakers-of-moon-bay',
-    'Mapmakers of Moon Bay',
-    'Middle-grade story focused on teamwork, creativity, and discovery.',
-    'books',
-    18000,
-    'sek',
-    18,
-    'assets/images/book-mapmakers.svg',
-    true,
-    NULL
-  ),
-  (
-    'adult-creative-reset-calendar',
-    'Adult Creative Reset Calendar',
-    'Daily prompts for adults building calm, consistent hobby habits.',
-    'calendars',
-    20000,
-    'sek',
-    16,
-    'assets/images/calendar-adult.svg',
-    true,
-    NULL
-  ),
-  (
-    'family-hobby-year-planner',
-    'Family Hobby Year Planner',
-    'Monthly family activities with low-prep ideas and memory prompts.',
-    'calendars',
-    22000,
-    'sek',
-    14,
-    'assets/images/calendar-family.svg',
-    true,
-    NULL
-  ),
-  (
     'dog',
     'Dog',
     'Handmade crochet dog in a cozy green sweater, created as a cheerful shelf companion or thoughtful gift.',
@@ -105,3 +57,14 @@ ON CONFLICT (slug) DO UPDATE SET
   active = EXCLUDED.active,
   stripe_tax_code = EXCLUDED.stripe_tax_code,
   updated_at = CURRENT_TIMESTAMP;
+
+UPDATE products
+SET active = false,
+    updated_at = CURRENT_TIMESTAMP
+WHERE category <> 'amigurumi';
+
+INSERT INTO product_images (product_id, image_path, sort_order)
+SELECT id, image_path, 1
+FROM products
+WHERE slug IN ('dog', 'forest-friend-fox', 'pocket-ocean-octopus')
+ON CONFLICT (product_id, image_path) DO NOTHING;

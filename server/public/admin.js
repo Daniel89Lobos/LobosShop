@@ -36,7 +36,7 @@ const expandedOrderDetails = new Map();
 const expandedProductIds = new Set();
 
 let adminProductMeta = {
-  categories: ["books", "calendars", "amigurumi"],
+  categories: ["amigurumi"],
   currency: "SEK",
   lowStockThreshold: 5,
 };
@@ -554,7 +554,13 @@ function getProductStatus(product) {
 }
 
 function getProductCategoryOptions(selectedCategory) {
-  return adminProductMeta.categories
+  const categories = [...adminProductMeta.categories];
+
+  if (selectedCategory && !categories.includes(selectedCategory)) {
+    categories.unshift(selectedCategory);
+  }
+
+  return categories
     .map(
       (category) => `<option value="${category}"${category === selectedCategory ? " selected" : ""}>${getCategoryLabel(category)}</option>`,
     )
@@ -571,7 +577,7 @@ function getFeaturedLabelInputName(slot) {
 
 function getFeaturedSelectableProducts() {
   return adminProductState.products
-    .filter((product) => product.active)
+    .filter((product) => product.active && product.category === "amigurumi")
     .slice()
     .sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base" }));
 }
@@ -741,21 +747,50 @@ function formatPriceInputValue(unitAmount) {
   return (Number(unitAmount || 0) / 100).toFixed(2);
 }
 
-function getImagePreviewMarkup(imagePath, imageAlt) {
-  if (!imagePath) {
+function getProductImagePaths(product) {
+  const imagePaths = Array.isArray(product?.imagePaths)
+    ? product.imagePaths.map((imagePath) => String(imagePath || "").trim()).filter(Boolean)
+    : [];
+  const primaryImagePath = String(product?.imagePath || "").trim();
+
+  if (primaryImagePath && !imagePaths.includes(primaryImagePath)) {
+    imagePaths.unshift(primaryImagePath);
+  }
+
+  return imagePaths;
+}
+
+function getImageGalleryMarkup(imagePaths = [], imageAlt = "Product image") {
+  if (!Array.isArray(imagePaths) || imagePaths.length === 0) {
     return `
-      <div class="admin-image-preview is-empty" data-image-preview>
+      <div class="admin-image-gallery is-empty" data-image-gallery>
         <span>No image uploaded</span>
       </div>
-      <p class="muted" data-image-path-label>No image selected yet.</p>
+      <p class="muted" data-image-path-label>No images selected yet.</p>
     `;
   }
 
   return `
-    <div class="admin-image-preview" data-image-preview>
-      <img src="${escapeHtml(imagePath)}" alt="${escapeHtml(imageAlt)}" />
+    <div class="admin-image-gallery" data-image-gallery>
+      ${imagePaths
+        .map(
+          (imagePath, index) => `
+            <article class="admin-gallery-item">
+              <img src="${escapeHtml(imagePath)}" alt="${escapeHtml(imageAlt)} ${index + 1}" />
+              <div class="admin-gallery-actions">
+                <span class="card-tag">${index === 0 ? "Primary" : `Image ${index + 1}`}</span>
+                <button class="link-btn" type="button" data-gallery-primary="${index}" ${index === 0 ? "disabled" : ""}>Make primary</button>
+                <button class="link-btn" type="button" data-gallery-move="up" data-gallery-index="${index}" ${index === 0 ? "disabled" : ""}>Up</button>
+                <button class="link-btn" type="button" data-gallery-move="down" data-gallery-index="${index}" ${index === imagePaths.length - 1 ? "disabled" : ""}>Down</button>
+                <button class="link-btn" type="button" data-gallery-remove="${index}">Remove</button>
+              </div>
+              <p class="muted admin-card-note">${escapeHtml(imagePath)}</p>
+            </article>
+          `,
+        )
+        .join("")}
     </div>
-    <p class="muted" data-image-path-label>${escapeHtml(imagePath)}</p>
+    <p class="muted" data-image-path-label>${imagePaths.length} image${imagePaths.length === 1 ? "" : "s"} selected. The first image is shown as primary.</p>
   `;
 }
 
@@ -776,7 +811,7 @@ function updateProductResultsLabel(visibleCount, totalCount) {
 function productMatchesFilters(product) {
   const { search, category, status } = adminProductState.filters;
   const productStatus = getProductStatus(product);
-  const searchHaystack = [product.name, product.slug, product.description, product.imagePath]
+  const searchHaystack = [product.name, product.slug, product.description, product.imagePath, ...(product.imagePaths || [])]
     .join(" ")
     .toLowerCase();
 
@@ -948,18 +983,18 @@ function renderProductList() {
             </label>
 
             <section class="admin-image-field">
-              <input name="imagePath" type="hidden" value="${escapeHtml(product.imagePath)}" />
+              <input name="imagePaths" type="hidden" value="${escapeHtml(JSON.stringify(getProductImagePaths(product)))}" />
               <div class="admin-image-preview-wrap">
-                ${getImagePreviewMarkup(product.imagePath, `Preview of ${product.name}`)}
+                ${getImageGalleryMarkup(getProductImagePaths(product), `Preview of ${product.name}`)}
               </div>
               <div class="admin-image-controls">
                 <label>
-                  Product image
-                  <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                  Product images
+                  <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
                 </label>
                 <div class="admin-inline-actions">
-                  <button class="btn btn-secondary" type="button" data-upload-image>Save image</button>
-                  <button class="btn btn-secondary" type="button" data-clear-image>Clear image</button>
+                  <button class="btn btn-secondary" type="button" data-upload-image>Add selected images</button>
+                  <button class="btn btn-secondary" type="button" data-clear-image>Clear gallery</button>
                 </div>
               </div>
             </section>
@@ -991,7 +1026,7 @@ function parsePriceToMinorUnits(value) {
 }
 
 function getImagePathInput(form) {
-  return form?.querySelector('input[name="imagePath"]');
+  return form?.querySelector('input[name="imagePaths"]');
 }
 
 function getImageFileInput(form) {
@@ -999,7 +1034,7 @@ function getImageFileInput(form) {
 }
 
 function getImagePreviewContainer(form) {
-  return form?.querySelector("[data-image-preview]");
+  return form?.querySelector("[data-image-gallery]");
 }
 
 function getImagePathLabel(form) {
@@ -1020,34 +1055,51 @@ function revokePreviewUrl(form) {
   }
 }
 
-function setProductImagePreview(form, imagePath, options = {}) {
-  const { previewUrl = null, label = null } = options;
+function getFormImagePaths(form) {
+  const imagePathInput = getImagePathInput(form);
+
+  if (!imagePathInput) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(imagePathInput.value || "[]");
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((imagePath) => String(imagePath || "").trim()).filter(Boolean);
+    }
+  } catch (error) {
+  }
+
+  return [];
+}
+
+function setProductImagePreview(form, imagePaths) {
   const imagePathInput = getImagePathInput(form);
   const previewContainer = getImagePreviewContainer(form);
   const pathLabel = getImagePathLabel(form);
+  const nextImagePaths = [...new Set((Array.isArray(imagePaths) ? imagePaths : []).map((imagePath) => String(imagePath || "").trim()).filter(Boolean))];
 
   if (!imagePathInput || !previewContainer || !pathLabel) {
     return;
   }
 
   revokePreviewUrl(form);
+  imagePathInput.value = JSON.stringify(nextImagePaths);
+  const galleryWrapper = document.createElement("div");
+  galleryWrapper.innerHTML = getImageGalleryMarkup(nextImagePaths, getProductImageAlt(form));
+  const nextGallery = galleryWrapper.querySelector("[data-image-gallery]");
 
-  if (previewUrl) {
-    form.dataset.previewUrl = previewUrl;
+  if (nextGallery) {
+    previewContainer.replaceWith(nextGallery);
   }
 
-  imagePathInput.value = imagePath || "";
-
-  if (previewUrl || imagePath) {
-    previewContainer.classList.remove("is-empty");
-    previewContainer.innerHTML = `<img src="${escapeHtml(previewUrl || imagePath)}" alt="${escapeHtml(getProductImageAlt(form))}" />`;
-    pathLabel.textContent = label || imagePath || "Image selected";
-    return;
+  const updatedPathLabel = getImagePathLabel(form);
+  if (updatedPathLabel) {
+    updatedPathLabel.textContent = nextImagePaths.length === 0
+      ? "No images selected yet."
+      : `${nextImagePaths.length} image${nextImagePaths.length === 1 ? "" : "s"} selected. The first image is shown as primary.`;
   }
-
-  previewContainer.classList.add("is-empty");
-  previewContainer.innerHTML = "<span>No image uploaded</span>";
-  pathLabel.textContent = "No image selected yet.";
 }
 
 function markPendingImageUpload(form, isPending) {
@@ -1063,16 +1115,16 @@ function previewSelectedImageFile(form) {
 
   if (!imageFileInput?.files?.[0]) {
     markPendingImageUpload(form, false);
-    setProductImagePreview(form, getImagePathInput(form)?.value || "");
     return;
   }
 
-  const previewUrl = URL.createObjectURL(imageFileInput.files[0]);
   markPendingImageUpload(form, true);
-  setProductImagePreview(form, getImagePathInput(form)?.value || "", {
-    previewUrl,
-    label: `Selected: ${imageFileInput.files[0].name}. Save image to keep it.`,
-  });
+
+  const pathLabel = getImagePathLabel(form);
+  if (pathLabel) {
+    const fileCount = imageFileInput.files.length;
+    pathLabel.textContent = `Selected ${fileCount} image${fileCount === 1 ? "" : "s"}. Add selected images to keep them.`;
+  }
 }
 
 function clearSelectedImage(form) {
@@ -1083,15 +1135,50 @@ function clearSelectedImage(form) {
   }
 
   markPendingImageUpload(form, false);
-  setProductImagePreview(form, "");
+  setProductImagePreview(form, []);
+}
+
+function setPrimaryGalleryImage(form, index) {
+  const imagePaths = getFormImagePaths(form);
+
+  if (index <= 0 || index >= imagePaths.length) {
+    return;
+  }
+
+  const [imagePath] = imagePaths.splice(index, 1);
+  imagePaths.unshift(imagePath);
+  setProductImagePreview(form, imagePaths);
+}
+
+function moveGalleryImage(form, index, direction) {
+  const imagePaths = getFormImagePaths(form);
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+
+  if (index < 0 || nextIndex < 0 || index >= imagePaths.length || nextIndex >= imagePaths.length) {
+    return;
+  }
+
+  [imagePaths[index], imagePaths[nextIndex]] = [imagePaths[nextIndex], imagePaths[index]];
+  setProductImagePreview(form, imagePaths);
+}
+
+function removeGalleryImage(form, index) {
+  const imagePaths = getFormImagePaths(form);
+
+  if (index < 0 || index >= imagePaths.length) {
+    return;
+  }
+
+  imagePaths.splice(index, 1);
+  setProductImagePreview(form, imagePaths);
 }
 
 async function uploadSelectedImage(form, triggerButton) {
   const imageFileInput = getImageFileInput(form);
-  const file = imageFileInput?.files?.[0];
+  const files = Array.from(imageFileInput?.files || []);
 
-  if (!file) {
-    throw new Error("Choose an image before uploading.");
+  if (files.length === 0) {
+    throw new Error("Choose at least one image before uploading.");
   }
 
   if (triggerButton) {
@@ -1100,21 +1187,26 @@ async function uploadSelectedImage(form, triggerButton) {
   }
 
   try {
-    const data = await uploadProductImage(file);
+    const uploadedImages = [];
+
+    for (const file of files) {
+      const data = await uploadProductImage(file);
+      uploadedImages.push(data.imagePath);
+    }
+
+    const nextImagePaths = [...getFormImagePaths(form), ...uploadedImages];
     markPendingImageUpload(form, false);
-    setProductImagePreview(form, data.imagePath, {
-      label: data.imagePath,
-    });
+    setProductImagePreview(form, nextImagePaths);
 
     if (imageFileInput) {
       imageFileInput.value = "";
     }
 
-    showAdminNotice("Image uploaded.", "success");
+    showAdminNotice(`${uploadedImages.length} image${uploadedImages.length === 1 ? "" : "s"} uploaded.`, "success");
   } finally {
     if (triggerButton) {
       triggerButton.disabled = false;
-      triggerButton.textContent = "Save image";
+      triggerButton.textContent = "Add selected images";
     }
   }
 }
@@ -1122,18 +1214,18 @@ async function uploadSelectedImage(form, triggerButton) {
 function buildProductPayload(form) {
   const formData = new FormData(form);
   const stockQuantity = Number.parseInt(String(formData.get("stockQuantity") || ""), 10);
-  const imagePath = String(formData.get("imagePath") || "").trim();
+  const imagePaths = getFormImagePaths(form);
 
   if (form.dataset.pendingImageUpload === "true") {
-    throw new Error("Upload the selected image before saving this product.");
+    throw new Error("Add the selected images before saving this product.");
   }
 
   if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
     throw new Error("Stock quantity must be zero or higher.");
   }
 
-  if (!imagePath) {
-    throw new Error("Upload an image for this product before saving.");
+  if (imagePaths.length === 0) {
+    throw new Error("Upload at least one image for this product before saving.");
   }
 
   const name = String(formData.get("name") || "").trim();
@@ -1146,7 +1238,8 @@ function buildProductPayload(form) {
     description: String(formData.get("description") || "").trim(),
     unitAmount: parsePriceToMinorUnits(formData.get("price")),
     stockQuantity,
-    imagePath,
+    imagePath: imagePaths[0],
+    imagePaths,
     stripeTaxCode: String(formData.get("stripeTaxCode") || "").trim(),
     active: formData.get("active") === "on",
   };
@@ -1394,6 +1487,9 @@ function bindCreateProductForm() {
   adminProductCreateForm.addEventListener("click", async (event) => {
     const uploadButton = event.target.closest("[data-upload-image]");
     const clearButton = event.target.closest("[data-clear-image]");
+    const primaryButton = event.target.closest("[data-gallery-primary]");
+    const moveButton = event.target.closest("[data-gallery-move]");
+    const removeButton = event.target.closest("[data-gallery-remove]");
 
     if (uploadButton) {
       try {
@@ -1406,6 +1502,25 @@ function bindCreateProductForm() {
 
     if (clearButton) {
       clearSelectedImage(adminProductCreateForm);
+      return;
+    }
+
+    if (primaryButton) {
+      setPrimaryGalleryImage(adminProductCreateForm, Number.parseInt(primaryButton.dataset.galleryPrimary, 10));
+      return;
+    }
+
+    if (moveButton) {
+      moveGalleryImage(
+        adminProductCreateForm,
+        Number.parseInt(moveButton.dataset.galleryIndex, 10),
+        moveButton.dataset.galleryMove,
+      );
+      return;
+    }
+
+    if (removeButton) {
+      removeGalleryImage(adminProductCreateForm, Number.parseInt(removeButton.dataset.galleryRemove, 10));
     }
   });
 
@@ -1479,8 +1594,11 @@ function bindProductManagement() {
     const toggleVisibilityButton = event.target.closest("[data-product-toggle-visibility]");
     const deleteButton = event.target.closest("[data-product-delete]");
     const expandButton = event.target.closest("[data-product-expand]");
+    const primaryButton = event.target.closest("[data-gallery-primary]");
+    const moveButton = event.target.closest("[data-gallery-move]");
+    const removeButton = event.target.closest("[data-gallery-remove]");
 
-    if (!uploadButton && !clearButton && !toggleVisibilityButton && !deleteButton && !expandButton) {
+    if (!uploadButton && !clearButton && !toggleVisibilityButton && !deleteButton && !expandButton && !primaryButton && !moveButton && !removeButton) {
       return;
     }
 
@@ -1497,6 +1615,21 @@ function bindProductManagement() {
     const form = event.target.closest("[data-product-form]");
 
     if (!form) {
+      return;
+    }
+
+    if (primaryButton) {
+      setPrimaryGalleryImage(form, Number.parseInt(primaryButton.dataset.galleryPrimary, 10));
+      return;
+    }
+
+    if (moveButton) {
+      moveGalleryImage(form, Number.parseInt(moveButton.dataset.galleryIndex, 10), moveButton.dataset.galleryMove);
+      return;
+    }
+
+    if (removeButton) {
+      removeGalleryImage(form, Number.parseInt(removeButton.dataset.galleryRemove, 10));
       return;
     }
 

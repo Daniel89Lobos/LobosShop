@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS product_images (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  image_path TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1 CHECK (sort_order >= 1),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (product_id, image_path),
+  UNIQUE (product_id, sort_order)
+);
+
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   stripe_checkout_session_id TEXT NOT NULL UNIQUE,
@@ -84,6 +94,9 @@ CREATE TABLE IF NOT EXISTS featured_products (
 
 CREATE INDEX IF NOT EXISTS idx_products_active_category
   ON products (active, category);
+
+CREATE INDEX IF NOT EXISTS idx_product_images_product_id_sort_order
+  ON product_images (product_id, sort_order);
 
 CREATE INDEX IF NOT EXISTS idx_orders_created_at
   ON orders (created_at DESC);

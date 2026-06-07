@@ -18,7 +18,6 @@
       <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
       <nav id="siteNav" class="site-nav">
         <a class="active" href="index.html">Home</a>
-        <a href="shop.html">Shop</a>
         <a href="about.html">About</a>
         <a href="faq.html">FAQ</a>
         <a href="contact.html">Contact</a>
@@ -30,27 +29,25 @@
 
     <main>
       <section class="hero">
-        <p class="eyebrow">Handmade crochet companions</p>
-        <h1>Soft handmade amigurumi for gifts, play, and cozy display.</h1>
+        <p class="eyebrow">Handmade amigurumi</p>
+        <h1>Soft crochet companions, handmade one at a time.</h1>
         <p>
-          Browse one-of-a-kind crochet animals made with care, character, and
-          a little storybook charm for family spaces.
+          Browse available amigurumi made for gifting, play, and cozy display.
+          Each piece is small-batch and stocked as it is finished.
         </p>
-        <div class="hero-actions">
-          <a class="btn" href="shop.html">Browse amigurumi</a>
-          <a class="btn btn-secondary" href="about.html">Our story</a>
-        </div>
       </section>
 
       <section class="featured">
-        <h2>Featured Amigurumi</h2>
+        <h2>Available Amigurumi</h2>
+        <p id="featuredProductsResults" class="muted"></p>
         <p id="featuredProductsNotice" class="page-status" hidden></p>
         <div id="featuredProducts" class="cards" aria-live="polite">
           <article class="card empty-state">
-            <h3>Loading featured amigurumi...</h3>
+            <h3>Loading available amigurumi...</h3>
             <p>Pulling the latest handmade items from the shop catalog.</p>
           </article>
         </div>
+        <nav id="featuredProductsPagination" class="pagination" aria-label="Amigurumi pages" hidden></nav>
       </section>
     </main>
 

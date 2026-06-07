@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Featured Products | Lobos Shop Admin</title>
+    <meta http-equiv="refresh" content="0; url=admin-products.html" />
+    <title>Redirecting | Lobos Shop Admin</title>
+    <script>
+      window.location.replace("admin-products.html");
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,72 +16,12 @@
     />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body data-admin-view="featured">
-    <header class="site-header">
-      <a class="brand" href="index.html">Lobos Shop</a>
-      <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu">Menu</button>
-      <nav id="siteNav" class="site-nav">
-        <a href="index.html">Home</a>
-        <a href="shop.html">Shop</a>
-        <a href="about.html">About</a>
-        <a href="faq.html">FAQ</a>
-        <a href="contact.html">Contact</a>
-        <a class="active" href="admin.html" data-admin-link hidden>Admin</a>
-        <a href="account.html" data-account-link>Login</a>
-        <a href="cart.html" class="cart-link">Cart <span class="cart-count" data-cart-count hidden>0</span></a>
-      </nav>
-    </header>
-
+  <body>
     <main>
       <section class="content-panel">
-        <p class="eyebrow">Admin navigation</p>
-        <div class="admin-page-nav">
-          <a class="admin-page-link" href="admin.html">Overview</a>
-          <a class="admin-page-link" href="admin-add-product.html">Add product</a>
-          <a class="admin-page-link" href="admin-products.html">Product management</a>
-          <a class="admin-page-link is-active" href="admin-featured.html">Featured products</a>
-          <a class="admin-page-link" href="admin-orders.html">Pending orders</a>
-          <a class="admin-page-link" href="admin-accounts.html">Accounts</a>
-        </div>
-      </section>
-
-      <section class="content-panel">
-        <div class="admin-section-heading">
-          <div>
-            <p class="eyebrow">Merchandising</p>
-            <h1>Featured products</h1>
-            <p>Choose which products appear on the homepage and add optional labels like New, Sale, or Bestseller.</p>
-          </div>
-          <button id="refreshFeaturedButton" class="btn btn-secondary" type="button">Refresh</button>
-        </div>
-      </section>
-
-      <p id="adminNotice" class="page-status" hidden></p>
-
-      <section class="content-panel">
-        <form id="adminFeaturedForm" class="admin-featured-shell">
-          <div class="admin-featured-summary">
-            <p id="adminFeaturedResults" class="muted">Loading homepage slots...</p>
-            <button id="saveFeaturedButton" class="btn" type="submit">Save featured products</button>
-          </div>
-
-          <datalist id="featuredLabelSuggestions">
-            <option value="New"></option>
-            <option value="Sale"></option>
-            <option value="Bestseller"></option>
-            <option value="Limited"></option>
-            <option value="Seasonal"></option>
-          </datalist>
-
-          <div id="adminFeaturedSlots" class="admin-list"></div>
-        </form>
+        <h1>Redirecting...</h1>
+        <p><a class="text-link" href="admin-products.html">Open product management</a></p>
       </section>
     </main>
-
-    <footer class="site-footer">
-      <p>Lobos Shop</p>
-    </footer>
-    <script src="script.js"></script>
-    <script src="admin.js"></script>
   </body>
 </html>
