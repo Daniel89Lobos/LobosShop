@@ -96,9 +96,11 @@
               <p class="muted" data-image-path-label>No images selected yet.</p>
             </div>
             <div class="admin-image-controls">
-              <label>
-                Product images
+              <label class="admin-image-dropzone" data-image-dropzone>
                 <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+                <span class="admin-dropzone-title">Drop product images here</span>
+                <span class="muted">or click to choose several images</span>
+                <span class="admin-dropzone-count" data-image-file-count>No images selected for upload.</span>
               </label>
               <div class="admin-inline-actions">
                 <button class="btn btn-secondary" type="button" data-upload-image>Add selected images</button>

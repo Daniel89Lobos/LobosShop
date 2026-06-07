@@ -988,9 +988,11 @@ function renderProductList() {
                 ${getImageGalleryMarkup(getProductImagePaths(product), `Preview of ${product.name}`)}
               </div>
               <div class="admin-image-controls">
-                <label>
-                  Product images
+                <label class="admin-image-dropzone" data-image-dropzone>
                   <input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+                  <span class="admin-dropzone-title">Drop product images here</span>
+                  <span class="muted">or click to choose several images</span>
+                  <span class="admin-dropzone-count" data-image-file-count>No images selected for upload.</span>
                 </label>
                 <div class="admin-inline-actions">
                   <button class="btn btn-secondary" type="button" data-upload-image>Add selected images</button>
@@ -1031,6 +1033,14 @@ function getImagePathInput(form) {
 
 function getImageFileInput(form) {
   return form?.querySelector('input[name="imageFile"]');
+}
+
+function getImageDropZone(form) {
+  return form?.querySelector("[data-image-dropzone]");
+}
+
+function getImageFileCountLabel(form) {
+  return form?.querySelector("[data-image-file-count]");
 }
 
 function getImagePreviewContainer(form) {
@@ -1110,19 +1120,52 @@ function markPendingImageUpload(form, isPending) {
   form.dataset.pendingImageUpload = isPending ? "true" : "false";
 }
 
-function previewSelectedImageFile(form) {
-  const imageFileInput = getImageFileInput(form);
+function updateImageFileCountLabel(form, fileCount = 0) {
+  const fileCountLabel = getImageFileCountLabel(form);
 
-  if (!imageFileInput?.files?.[0]) {
+  if (!fileCountLabel) {
+    return;
+  }
+
+  fileCountLabel.textContent = fileCount > 0
+    ? `${fileCount} image${fileCount === 1 ? "" : "s"} ready to upload.`
+    : "No images selected for upload.";
+}
+
+function getSelectedImageFiles(form) {
+  return Array.from(getImageFileInput(form)?.files || []);
+}
+
+function setSelectedImageFiles(form, files) {
+  const imageFileInput = getImageFileInput(form);
+  const nextFiles = Array.from(files || []);
+
+  if (!imageFileInput || nextFiles.length === 0) {
+    return false;
+  }
+
+  const dataTransfer = new DataTransfer();
+  nextFiles.forEach((file) => dataTransfer.items.add(file));
+  imageFileInput.files = dataTransfer.files;
+  previewSelectedImageFile(form);
+  return true;
+}
+
+function previewSelectedImageFile(form) {
+  const files = getSelectedImageFiles(form);
+
+  if (files.length === 0) {
     markPendingImageUpload(form, false);
+    updateImageFileCountLabel(form, 0);
     return;
   }
 
   markPendingImageUpload(form, true);
+  updateImageFileCountLabel(form, files.length);
 
   const pathLabel = getImagePathLabel(form);
   if (pathLabel) {
-    const fileCount = imageFileInput.files.length;
+    const fileCount = files.length;
     pathLabel.textContent = `Selected ${fileCount} image${fileCount === 1 ? "" : "s"}. Add selected images to keep them.`;
   }
 }
@@ -1135,7 +1178,48 @@ function clearSelectedImage(form) {
   }
 
   markPendingImageUpload(form, false);
+  updateImageFileCountLabel(form, 0);
   setProductImagePreview(form, []);
+}
+
+function handleImageDropZoneEvent(event, form) {
+  const dropZone = event.target.closest("[data-image-dropzone]");
+
+  if (!dropZone || !form?.contains(dropZone)) {
+    return false;
+  }
+
+  if (event.type === "dragenter" || event.type === "dragover") {
+    event.preventDefault();
+    dropZone.classList.add("is-dragover");
+    return true;
+  }
+
+  if (event.type === "dragleave") {
+    if (!dropZone.contains(event.relatedTarget)) {
+      dropZone.classList.remove("is-dragover");
+    }
+    return true;
+  }
+
+  if (event.type === "drop") {
+    event.preventDefault();
+    dropZone.classList.remove("is-dragover");
+
+    const files = Array.from(event.dataTransfer?.files || []).filter((file) =>
+      ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type),
+    );
+
+    if (files.length === 0) {
+      showAdminNotice("Drop JPG, PNG, WebP, or GIF images.");
+      return true;
+    }
+
+    setSelectedImageFiles(form, files);
+    return true;
+  }
+
+  return false;
 }
 
 function setPrimaryGalleryImage(form, index) {
@@ -1175,7 +1259,7 @@ function removeGalleryImage(form, index) {
 
 async function uploadSelectedImage(form, triggerButton) {
   const imageFileInput = getImageFileInput(form);
-  const files = Array.from(imageFileInput?.files || []);
+  const files = getSelectedImageFiles(form);
 
   if (files.length === 0) {
     throw new Error("Choose at least one image before uploading.");
@@ -1201,6 +1285,7 @@ async function uploadSelectedImage(form, triggerButton) {
     if (imageFileInput) {
       imageFileInput.value = "";
     }
+    updateImageFileCountLabel(form, 0);
 
     showAdminNotice(`${uploadedImages.length} image${uploadedImages.length === 1 ? "" : "s"} uploaded.`, "success");
   } finally {
@@ -1484,6 +1569,12 @@ function bindCreateProductForm() {
     }
   });
 
+  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+    adminProductCreateForm.addEventListener(eventName, (event) => {
+      handleImageDropZoneEvent(event, adminProductCreateForm);
+    });
+  });
+
   adminProductCreateForm.addEventListener("click", async (event) => {
     const uploadButton = event.target.closest("[data-upload-image]");
     const clearButton = event.target.closest("[data-clear-image]");
@@ -1586,6 +1677,14 @@ function bindProductManagement() {
 
     const form = imageInput.closest("[data-product-form]");
     previewSelectedImageFile(form);
+  });
+
+  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+    adminProducts.addEventListener(eventName, (event) => {
+      const dropZone = event.target.closest("[data-image-dropzone]");
+      const form = dropZone?.closest("[data-product-form]");
+      handleImageDropZoneEvent(event, form);
+    });
   });
 
   adminProducts.addEventListener("click", async (event) => {
