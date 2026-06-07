@@ -180,7 +180,7 @@ async function ensureProductImagesTable() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS product_images (
        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-       product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+       product_id INTEGER NOT NULL,
        image_path TEXT NOT NULL,
        sort_order INTEGER NOT NULL DEFAULT 1 CHECK (sort_order >= 1),
        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2443,6 +2443,7 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
       const product = existingProduct.rows[0];
       const imagePaths = getProductImagePaths(product);
 
+      await client.query("DELETE FROM product_images WHERE product_id = $1", [productId]);
       await client.query("DELETE FROM products WHERE id = $1", [productId]);
 
       for (const imagePath of imagePaths) {
