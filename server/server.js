@@ -176,7 +176,7 @@ const emailTransport = process.env.SMTP_HOST && process.env.SMTP_FROM
     })
   : null;
 
-async function ensureShopSupportTables() {
+async function ensureProductImagesTable() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS product_images (
        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -206,7 +206,9 @@ async function ensureShopSupportTables() {
        )
      ON CONFLICT DO NOTHING`,
   );
+}
 
+async function ensureFeaturedProductsTable() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS featured_products (
        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -221,6 +223,16 @@ async function ensureShopSupportTables() {
   await pool.query(
     "CREATE INDEX IF NOT EXISTS idx_featured_products_product_id ON featured_products (product_id)",
   );
+}
+
+async function ensureShopSupportTables() {
+  await ensureFeaturedProductsTable();
+
+  try {
+    await ensureProductImagesTable();
+  } catch (error) {
+    console.error("Could not prepare product image gallery table:", error);
+  }
 }
 
 // Stripe webhook must receive the raw body before JSON parsing.
