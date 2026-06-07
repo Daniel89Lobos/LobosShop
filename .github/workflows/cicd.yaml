@@ -31,6 +31,7 @@ jobs:
 
             cd server
             npm ci --omit=dev
+            node scripts/migrate-shop-schema.js
 
             if pm2 describe lobos-shop >/dev/null 2>&1; then
               pm2 restart lobos-shop --update-env
